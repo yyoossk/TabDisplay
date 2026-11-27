@@ -144,6 +144,21 @@ class Prefs(ctx: Context) {
         get() = sp.getString("memo", "") ?: ""
         set(v) = sp.edit().putString("memo", v).apply()
 
+    /** 明るさ（-1 = 端末の設定のまま、10〜100） */
+    var brightness: Int
+        get() = sp.getInt("bright", -1)
+        set(v) = sp.edit().putInt("bright", v).apply()
+
+    /** 暖色（0 = なし〜100） */
+    var warmth: Int
+        get() = sp.getInt("warm", 0)
+        set(v) = sp.edit().putInt("warm", v).apply()
+
+    /** コントラスト（%、100 = そのまま。PC 側で変える） */
+    var contrast: Int
+        get() = sp.getInt("contrast", 100)
+        set(v) = sp.edit().putInt("contrast", v).apply()
+
     /** タッチパッドモード */
     var touchpad: Boolean
         get() = sp.getBoolean("touchpad", false)

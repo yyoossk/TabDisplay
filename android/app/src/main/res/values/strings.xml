@@ -34,7 +34,7 @@
     <string name="opt_audio">Play the PC\'s sound</string>
     <string name="gestures">Tap: click / Long press: right click / Drag: scroll\nTwo-finger tap: right click / Pinch: zoom / Pen: pen input with pressure\n⌨ button: keyboard</string>
     <string name="notes_title">Notes</string>
-    <string name="notes">- With two or more tablets, connecting or disconnecting one stops the picture on all tablets for a few seconds.\n- When quality changes automatically, or when you rotate the tablet, the picture stops very briefly.\n- All communication is encrypted. The first Wi-Fi connection needs the QR code on the PC (it is used to verify the PC).\n- Windows of programs running as administrator on the PC cannot be operated from the tablet.\n- Pen pressure and tilt need Windows 10 (1809) or later on the PC.\n- The PC\'s sound plays here with a short delay.\n- For USB, turn on \"USB debugging\". For Wi-Fi, put the PC and tablet on the same network.\n- The screen stays on while connected, which uses more battery. Charging while you use it is recommended.\n- Gamepad buttons reach the PC as keyboard keys.\n- When showing this device\'s screen on another tablet, only taps, long presses, scrolling and simple text input work from the other tablet (no pen pressure or shortcuts).\n- Clipboard sharing is text only. Files from the PC are saved in Download/TabDisplay (the app folder on Android 9 and earlier).\n- To update automatically, allow TabDisplay to install apps.</string>
+    <string name="notes">- With two or more tablets, connecting or disconnecting one stops the picture on all tablets for a few seconds.\n- When quality changes automatically, or when you rotate the tablet, the picture stops very briefly.\n- All communication is encrypted. The first Wi-Fi connection needs the QR code on the PC (it is used to verify the PC).\n- Windows of programs running as administrator on the PC cannot be operated from the tablet.\n- Pen pressure and tilt need Windows 10 (1809) or later on the PC.\n- The PC\'s sound plays here with a short delay.\n- For USB, turn on \"USB debugging\". For Wi-Fi, put the PC and tablet on the same network.\n- The screen stays on while connected, which uses more battery. Charging while you use it is recommended.\n- Gamepad buttons reach the PC as keyboard keys.\n- When showing this device\'s screen on another tablet, only taps, long presses, scrolling and simple text input work from the other tablet (no pen pressure or shortcuts).\n- Clipboard sharing is text only. Files from the PC are saved in Download/TabDisplay (the app folder on Android 9 and earlier).\n- To update automatically, allow TabDisplay to install apps.\n- Changing contrast is done on the PC, which uses a little more of the PC.\n- Recordings have no sound. Screenshots need Android 7 or later.</string>
     <string name="sc_copy">Copy</string>
     <string name="sc_paste">Paste</string>
     <string name="sc_cut">Cut</string>
@@ -60,7 +60,7 @@
     <string name="input_only_on">Pen tablet mode: the picture is not shown. This tablet\'s surface matches the PC\'s main screen.</string>
     <string name="input_only_off">Showing the picture again</string>
     <string name="no_region">The window to show was not found on the PC.</string>
-    <string name="buttons_help">Buttons at the bottom right: ☰ shortcuts / 🎮 gamepad / ◧ right, middle and scroll buttons on the left edge (hold Right or Middle and tap the screen) / ✎ pen tablet mode (no picture) / 🖱 touchpad mode / ⌨ keyboard\nGamepad buttons are sent as keys: arrows, A=X, B=Z, X=S, Y=A, L=Q, R=W, START=Enter, SELECT=right Shift</string>
+    <string name="buttons_help">Buttons at the bottom right: 🔍 magnifier / ▤ split screen / ☰ shortcuts, files, screenshot, recording / 🎮 gamepad / ◧ right, middle and scroll buttons on the left edge (hold Right or Middle and tap the screen) / ✎ pen tablet mode (no picture) / 🖱 touchpad mode / ⌨ keyboard\nGamepad buttons are sent as keys: arrows, A=X, B=Z, X=S, Y=A, L=Q, R=W, START=Enter, SELECT=right Shift</string>
     <string name="sender_title">Show this device\'s screen on another tablet</string>
     <string name="sender_help">No PC needed. On the other tablet, open TabDisplay, press \"Scan QR code\" and scan the code shown here. Both devices must be on the same Wi-Fi.\nTo operate this device from the other tablet, turn on the TabDisplay accessibility service (Android 7 or later). Taps, long presses, scrolling and simple text input work.</string>
     <string name="sender_audio">Also send this device\'s sound (Android 10 or later)</string>
@@ -101,4 +101,27 @@
     <string name="upd_allow">Allow installing apps from TabDisplay, then press \"Check for updates\" again.</string>
     <string name="upd_downloading">Downloading the update…</string>
     <string name="log_share">Share log</string>
+    <string name="pad_edit">Edit layout</string>
+    <string name="pad_edit_on">Edit mode: drag a button to move it, tap it to choose its key. Press \"Edit layout\" again to finish.</string>
+    <string name="pad_edit_off">Layout saved</string>
+    <string name="pad_bigger">Bigger</string>
+    <string name="pad_smaller">Smaller</string>
+    <string name="pad_reset">Reset</string>
+    <string name="pad_choose">Key for %1$s</string>
+    <string name="mag_on">Magnifier: pinch to zoom the picture, drag to move, tap to click, long press to right click</string>
+    <string name="mag_off">Magnifier off</string>
+    <string name="shot_take">Screenshot</string>
+    <string name="shot_saved">Saved: %1$s</string>
+    <string name="shot_failed">Could not take a screenshot</string>
+    <string name="shot_unsupported">Screenshots need Android 7 or later</string>
+    <string name="rec_start">Start recording</string>
+    <string name="rec_stop">Stop recording</string>
+    <string name="rec_started">Recording… (no sound)</string>
+    <string name="rec_saved">Recording saved: %1$s</string>
+    <string name="rec_failed">Could not record</string>
+    <string name="notify_channel">PC notifications</string>
+    <string name="opt_brightness">Brightness</string>
+    <string name="brightness_system">same as the tablet setting</string>
+    <string name="opt_warmth">Warm color (for night)</string>
+    <string name="opt_contrast">Contrast (done on the PC)</string>
 </resources>

@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Point
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -132,6 +133,9 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
             visibility = View.GONE
         }
         root.addView(padView, FrameLayout.LayoutParams(1, 1, Gravity.CENTER))
+        // 暖色の膜（明るさ・色の設定）。映像の上、ボタンの下
+        warmView = View(this).apply { visibility = View.GONE }
+        root.addView(warmView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         message = TextView(this).apply {
             setTextColor(Color.WHITE)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
@@ -178,11 +182,12 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
             gamepad.visibility = if (gamepad.visibility == View.VISIBLE) View.GONE else View.VISIBLE
             updateModeButtons()
         }
+        magButton = roundButton("🔍") { toggleMagnifier() }
         splitButton = roundButton("▤") {
             prefs.split = !prefs.split
             applySplit()
         }
-        for (b in listOf(menuButton, splitButton, padButton, stripButton, ioButton, tpButton, kbButton)) {
+        for (b in listOf(menuButton, magButton, splitButton, padButton, stripButton, ioButton, tpButton, kbButton)) {
             buttons.addView(b, LinearLayout.LayoutParams(dp(44), dp(44)).apply { setMargins(0, dp(6), 0, 0) })
         }
         root.addView(buttons, FrameLayout.LayoutParams(
@@ -209,6 +214,10 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
         setContentView(root)
         Discovery.start(this)
         clipboard.addPrimaryClipChangedListener(clipListener)
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 3)
+        }
         root.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> layoutVideo(); layoutPad(); layoutSplitPanel() }
 
         setupTouch(video)
@@ -240,6 +249,7 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
 
     override fun onResume() {
         super.onResume()
+        applyLook()
         applySplit()
         buildShortcuts()
         updateTouchpadButton()
@@ -330,6 +340,19 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
             setPadding(dp(6), dp(12), dp(6), dp(12))
             setOnClickListener { pickFilesToSend() }
         })
+        for ((label, action) in listOf(
+            R.string.shot_take to { takePicture() },
+            (if (recorder != null) R.string.rec_stop else R.string.rec_start) to { toggleRecording() },
+        )) {
+            sideBar.addView(TextView(this).apply {
+                setText(label)
+                setTextColor(Color.YELLOW)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+                gravity = Gravity.CENTER
+                setPadding(dp(6), dp(12), dp(6), dp(12))
+                setOnClickListener { action() }
+            })
+        }
         for (id in prefs.shortcuts) {
             val item = Shortcuts.byId(id) ?: continue
             sideBar.addView(TextView(this).apply {
@@ -434,13 +457,29 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
         val rh = availHeight()
         if (w <= 0 || h <= 0 || rw <= 0 || rh <= 0) return
         val scale = minOf(rw.toFloat() / w, rh.toFloat() / h)
-        val lw = (w * scale).toInt()
-        val lh = (h * scale).toInt()
+        val bw = (w * scale).toInt()
+        val bh = (h * scale).toInt()
         val lp = video.layoutParams as FrameLayout.LayoutParams
-        if (lp.width != lw || lp.height != lh || lp.gravity != videoGravity()) {
+        if (magOn && zoom > 1.001f) {
+            // 拡大鏡：大きくした映像を、はみ出さない範囲で動かす
+            val lw = (bw * zoom).toInt()
+            val lh = (bh * zoom).toInt()
+            val baseL = (rw - bw) / 2f
+            val baseT = if (prefs.split) 0f else (rh - bh) / 2f
+            panX = panX.coerceIn(bw - lw.toFloat(), 0f)
+            panY = panY.coerceIn(bh - lh.toFloat(), 0f)
             lp.width = lw
             lp.height = lh
+            lp.gravity = Gravity.TOP or Gravity.START
+            lp.leftMargin = (baseL + panX).toInt()
+            lp.topMargin = (baseT + panY).toInt()
+            video.layoutParams = lp
+        } else if (lp.width != bw || lp.height != bh || lp.gravity != videoGravity() || lp.leftMargin != 0 || lp.topMargin != 0) {
+            lp.width = bw
+            lp.height = bh
             lp.gravity = videoGravity()
+            lp.leftMargin = 0
+            lp.topMargin = 0
             video.layoutParams = lp
         }
         layoutSplitPanel()
@@ -629,61 +668,287 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
         root.addView(strip, FrameLayout.LayoutParams(dp(56), FrameLayout.LayoutParams.MATCH_PARENT, Gravity.START))
     }
 
-    // ---------- ゲームパッド（キーボードのキーとして送る） ----------
+    // ---------- ゲームパッド（キーボードのキーとして送る。配置・大きさ・キーは変えられる） ----------
+
+    private var padKeys: MutableList<PadKey> = mutableListOf()
+    private var padEdit = false
+    private var padScale = 1f
+    private lateinit var padToolbar: LinearLayout
 
     private fun buildGamepad() {
         gamepad = FrameLayout(this).apply { visibility = View.GONE }
-        fun key(label: String, vk: Int) = TextView(this).apply {
-            text = label
+        root.addView(gamepad, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        padScale = getSharedPreferences("tabdisplay", MODE_PRIVATE).getFloat("pad_scale", 1f)
+        padKeys = GamepadLayout.load(this)
+        // 配置を変えるための帯（上の真ん中）
+        padToolbar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setBackgroundColor(0x88000000.toInt()) }
+        fun tb(label: Int, f: () -> Unit) = TextView(this).apply {
+            setText(label)
             setTextColor(Color.WHITE)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
-            gravity = Gravity.CENTER
-            setBackgroundColor(0x66000000)
-            alpha = 0.8f
-            setOnTouchListener { v, e ->
+            setPadding(dp(10), dp(8), dp(10), dp(8))
+            setOnClickListener { f() }
+        }
+        padToolbar.addView(tb(R.string.pad_edit) {
+            padEdit = !padEdit
+            if (!padEdit) GamepadLayout.save(this, padKeys)
+            Toast.makeText(this, if (padEdit) R.string.pad_edit_on else R.string.pad_edit_off, Toast.LENGTH_SHORT).show()
+            buildPadKeys()
+        })
+        padToolbar.addView(tb(R.string.pad_bigger) { padScale = minOf(2f, padScale + 0.1f); savePadScale(); buildPadKeys() })
+        padToolbar.addView(tb(R.string.pad_smaller) { padScale = maxOf(0.5f, padScale - 0.1f); savePadScale(); buildPadKeys() })
+        padToolbar.addView(tb(R.string.pad_reset) {
+            GamepadLayout.reset(this)
+            padKeys = GamepadLayout.load(this)
+            padScale = 1f; savePadScale()
+            buildPadKeys()
+        })
+        gamepad.addOnLayoutChangeListener { _, l, t, r, b, ol, ot, or2, ob -> if (r - l != or2 - ol || b - t != ob - ot) buildPadKeys() }
+    }
+
+    private fun savePadScale() {
+        getSharedPreferences("tabdisplay", MODE_PRIVATE).edit().putFloat("pad_scale", padScale).apply()
+    }
+
+    /** ボタンを置き直す（画面の大きさ・配置・大きさが変わったとき） */
+    private fun buildPadKeys() {
+        gamepad.removeAllViews()
+        val rw = gamepad.width
+        val rh = gamepad.height
+        if (rw <= 0 || rh <= 0) return
+        gamepad.addView(padToolbar, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.CENTER_HORIZONTAL))
+        for (k in padKeys) {
+            val w = (dp(k.w) * padScale).toInt()
+            val h = (dp(k.h) * padScale).toInt()
+            val v = TextView(this).apply {
+                text = k.label
+                setTextColor(Color.WHITE)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f * padScale)
+                gravity = Gravity.CENTER
+                setBackgroundColor(if (padEdit) 0x99FF9800.toInt() else 0x66000000)
+                alpha = 0.85f
+            }
+            val lp = FrameLayout.LayoutParams(w, h, Gravity.TOP or Gravity.START).apply {
+                leftMargin = (k.x * rw - w / 2).toInt().coerceIn(0, maxOf(0, rw - w))
+                topMargin = (k.y * rh - h / 2).toInt().coerceIn(0, maxOf(0, rh - h))
+            }
+            var downX = 0f
+            var downY = 0f
+            var moved = false
+            v.setOnTouchListener { view, e ->
+                if (padEdit) {
+                    // 配置を変える：なぞると動く、タップで割り当てるキーを選ぶ
+                    when (e.actionMasked) {
+                        MotionEvent.ACTION_DOWN -> { downX = e.rawX; downY = e.rawY; moved = false }
+                        MotionEvent.ACTION_MOVE -> {
+                            val dx = e.rawX - downX
+                            val dy = e.rawY - downY
+                            if (moved || hypot(dx, dy) > dp(8)) {
+                                moved = true
+                                val p = view.layoutParams as FrameLayout.LayoutParams
+                                p.leftMargin = (p.leftMargin + dx).toInt().coerceIn(0, maxOf(0, rw - w))
+                                p.topMargin = (p.topMargin + dy).toInt().coerceIn(0, maxOf(0, rh - h))
+                                view.layoutParams = p
+                                downX = e.rawX; downY = e.rawY
+                                k.x = (p.leftMargin + w / 2f) / rw
+                                k.y = (p.topMargin + h / 2f) / rh
+                            }
+                        }
+                        MotionEvent.ACTION_UP -> if (!moved) choosePadKey(k)
+                    }
+                    return@setOnTouchListener true
+                }
                 when (e.actionMasked) {
                     MotionEvent.ACTION_DOWN -> {
-                        if (prefs.haptic) v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-                        v.setBackgroundColor(0xCC1E88E5.toInt())
-                        conn?.post(Protocol.T_INPUT, JSONObject().put("k", "key").put("vk", vk).put("d", true))
+                        if (prefs.haptic) view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                        view.setBackgroundColor(0xCC1E88E5.toInt())
+                        conn?.post(Protocol.T_INPUT, JSONObject().put("k", "key").put("vk", k.vk).put("d", true))
                     }
                     MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                        v.setBackgroundColor(0x66000000)
-                        conn?.post(Protocol.T_INPUT, JSONObject().put("k", "key").put("vk", vk).put("d", false))
+                        view.setBackgroundColor(0x66000000)
+                        conn?.post(Protocol.T_INPUT, JSONObject().put("k", "key").put("vk", k.vk).put("d", false))
                     }
                 }
                 true
             }
+            gamepad.addView(v, lp)
         }
-        val s = dp(64)
-        fun place(v: View, gravity: Int, x: Int, y: Int, w: Int = s, h: Int = s) {
-            gamepad.addView(v, FrameLayout.LayoutParams(w, h, gravity).apply {
-                if (gravity and Gravity.END == Gravity.END) rightMargin = x else leftMargin = x
-                if (gravity and Gravity.BOTTOM == Gravity.BOTTOM) bottomMargin = y else topMargin = y
-            })
+    }
+
+    private fun choosePadKey(k: PadKey) {
+        val names = GamepadLayout.choices.map { it.first }.toTypedArray()
+        android.app.AlertDialog.Builder(this)
+            .setTitle(getString(R.string.pad_choose, k.label))
+            .setItems(names) { _, i ->
+                val (name, vk) = GamepadLayout.choices[i]
+                k.vk = vk
+                if (k.id !in listOf("up", "down", "left", "right")) k.label = name
+                GamepadLayout.save(this, padKeys)
+                buildPadKeys()
+            }
+            .show()
+    }
+
+    // ---------- 拡大鏡（映像そのものを拡大して見る） ----------
+    // 🔍 をオンにすると：2 本指で広げる・つまむ → 拡大縮小、1 本指でなぞる → 動かす、タップ → クリック、長押し → 右クリック
+
+    private var magOn = false
+    private var zoom = 1f
+    private var panX = 0f
+    private var panY = 0f
+    private lateinit var magButton: TextView
+
+    private var mDownX = 0f
+    private var mDownY = 0f
+    private var mLastX = 0f
+    private var mLastY = 0f
+    private var mDist = 0f
+    private var mMoved = false
+    private var mTwo = false
+    private var mDownTime = 0L
+
+    private fun toggleMagnifier() {
+        magOn = !magOn
+        if (!magOn) { zoom = 1f; panX = 0f; panY = 0f }
+        magButton.alpha = if (magOn) 1f else 0.6f
+        magButton.setBackgroundColor(if (magOn) 0xCC1E88E5.toInt() else 0x66000000)
+        Toast.makeText(this, if (magOn) R.string.mag_on else R.string.mag_off, Toast.LENGTH_SHORT).show()
+        layoutVideo()
+    }
+
+    private fun handleMagnify(v: View, e: MotionEvent) {
+        val now = SystemClock.elapsedRealtime()
+        when (e.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                mDownX = e.rawX; mDownY = e.rawY; mLastX = e.rawX; mLastY = e.rawY
+                mMoved = false; mTwo = false; mDownTime = now
+            }
+            MotionEvent.ACTION_POINTER_DOWN -> if (e.pointerCount == 2) {
+                mTwo = true
+                mDist = hypot(e.getX(0) - e.getX(1), e.getY(0) - e.getY(1))
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (mTwo && e.pointerCount >= 2) {
+                    val d = hypot(e.getX(0) - e.getX(1), e.getY(0) - e.getY(1))
+                    if (mDist > 0 && d > 0) {
+                        val nz = (zoom * d / mDist).coerceIn(1f, 5f)
+                        // 指の真ん中を中心に拡大する
+                        val fx = (e.getX(0) + e.getX(1)) / 2
+                        val fy = (e.getY(0) + e.getY(1)) / 2
+                        val k = nz / zoom
+                        panX -= fx * (k - 1)
+                        panY -= fy * (k - 1)
+                        zoom = nz
+                        mDist = d
+                        layoutVideo()
+                    }
+                } else if (!mTwo) {
+                    if (hypot(e.rawX - mDownX, e.rawY - mDownY) > dp(8)) mMoved = true
+                    if (mMoved) {
+                        panX += e.rawX - mLastX
+                        panY += e.rawY - mLastY
+                        layoutVideo()
+                    }
+                    mLastX = e.rawX; mLastY = e.rawY
+                }
+            }
+            MotionEvent.ACTION_UP -> {
+                if (!mMoved && !mTwo) {
+                    val long = now - mDownTime > ViewConfiguration.getLongPressTimeout()
+                    touchView = v
+                    sendInput(if (long) "rclick" else "click", e.x, e.y)
+                }
+            }
         }
-        val bl = Gravity.BOTTOM or Gravity.START
-        val br = Gravity.BOTTOM or Gravity.END
-        // 十字キー（左下）
-        place(key("▲", 0x26), bl, dp(20) + s, dp(20) + s * 2)
-        place(key("◀", 0x25), bl, dp(20), dp(20) + s)
-        place(key("▶", 0x27), bl, dp(20) + s * 2, dp(20) + s)
-        place(key("▼", 0x28), bl, dp(20) + s, dp(20))
-        // A B X Y（右下。右のボタン列よりさらに内側）
-        val rx = dp(70)
-        place(key("Y", 0x41), br, rx + s * 2, dp(20) + s)
-        place(key("X", 0x53), br, rx + s, dp(20) + s * 2)
-        place(key("A", 0x58), br, rx, dp(20) + s)
-        place(key("B", 0x5A), br, rx + s, dp(20))
-        // L R（上の左右）
-        place(key("L", 0x51), Gravity.TOP or Gravity.START, dp(20), dp(20), s * 2, s)
-        place(key("R", 0x57), Gravity.TOP or Gravity.END, rx, dp(20), s * 2, s)
-        // SELECT START（下の真ん中）
-        place(key("SELECT", 0xA1), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL, 0, dp(20), s * 2, dp(40))
-        gamepad.addView(key("START", 0x0D), FrameLayout.LayoutParams(s * 2, dp(40), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
-            bottomMargin = dp(70)
-        })
-        root.addView(gamepad, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+    }
+
+    // ---------- 明るさ・色（夜は暖色）・コントラスト ----------
+
+    private lateinit var warmView: View
+
+    private fun applyLook() {
+        val b = prefs.brightness
+        window.attributes = window.attributes.apply {
+            screenBrightness = if (b < 0) WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE else b / 100f
+        }
+        // 暖色：だいだい色の薄い膜を重ねる（さわっても下に通る）
+        warmView.setBackgroundColor(Color.argb((prefs.warmth * 0.45f * 255 / 100).toInt(), 255, 140, 0))
+        warmView.visibility = if (prefs.warmth > 0) View.VISIBLE else View.GONE
+        conn?.post(Protocol.T_OPTS, JSONObject().put("contrast", prefs.contrast / 100.0))
+    }
+
+    override fun contrast(): Double = prefs.contrast / 100.0
+
+    // ---------- 画面写真・録画 ----------
+
+    @Volatile private var recorder: Recorder? = null
+
+    private fun takePicture() {
+        if (Build.VERSION.SDK_INT < 24 || cfgW <= 0) {
+            Toast.makeText(this, R.string.shot_unsupported, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val bmp = android.graphics.Bitmap.createBitmap(cfgW, cfgH, android.graphics.Bitmap.Config.ARGB_8888)
+        android.view.PixelCopy.request(video, bmp, { r ->
+            if (r == android.view.PixelCopy.SUCCESS) {
+                Thread {
+                    val where = try { Recorder.savePicture(this, bmp) } catch (e: Exception) { null }
+                    ui.post {
+                        Toast.makeText(this, if (where != null) getString(R.string.shot_saved, where) else getString(R.string.shot_failed), Toast.LENGTH_LONG).show()
+                    }
+                }.start()
+            } else {
+                Toast.makeText(this, R.string.shot_failed, Toast.LENGTH_SHORT).show()
+            }
+        }, ui)
+    }
+
+    private fun toggleRecording() {
+        val r = recorder
+        if (r != null) {
+            recorder = null
+            Thread {
+                val where = r.stop()
+                ui.post {
+                    Toast.makeText(this, if (where != null) getString(R.string.rec_saved, where) else getString(R.string.rec_failed), Toast.LENGTH_LONG).show()
+                    buildShortcuts()
+                }
+            }.start()
+            return
+        }
+        val sps = cfgSps
+        val pps = cfgPps
+        if (sps == null || pps == null || cfgW <= 0) return
+        try {
+            recorder = Recorder(this, if (cfgCodec == "hevc") VideoDecoder.HEVC else VideoDecoder.MIME, cfgW, cfgH, sps, pps, cfgVps)
+            lastIdrRequest = 0L
+            requestIdr() // キーフレームから始めるため
+            Toast.makeText(this, R.string.rec_started, Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            Toast.makeText(this, R.string.rec_failed, Toast.LENGTH_SHORT).show()
+        }
+        buildShortcuts()
+    }
+
+    // ---------- PC の通知 ----------
+
+    override fun onNotify(app: String, title: String, body: String) {
+        ui.post {
+            val nm = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
+            if (Build.VERSION.SDK_INT >= 26) {
+                nm.createNotificationChannel(android.app.NotificationChannel("pc", getString(R.string.notify_channel),
+                    android.app.NotificationManager.IMPORTANCE_DEFAULT))
+            }
+            @Suppress("DEPRECATION")
+            val b = if (Build.VERSION.SDK_INT >= 26) android.app.Notification.Builder(this, "pc") else android.app.Notification.Builder(this)
+            val n = b.setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setContentTitle(if (app.isNotEmpty()) "$title（$app）" else title)
+                .setContentText(body)
+                .setStyle(android.app.Notification.BigTextStyle().bigText(body))
+                .setAutoCancel(true)
+                .build()
+            try { nm.notify((System.currentTimeMillis() and 0x7fffffff).toInt(), n) } catch (_: Exception) {}
+        }
     }
 
     // ---------- 接続 ----------
@@ -701,6 +966,8 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
     }
 
     override fun onConfig(w: Int, h: Int, fps: Int, codec: String, vps: ByteArray?, sps: ByteArray, pps: ByteArray) {
+        // 大きさが変わったら録画はそこで終える（1 つの動画の中で大きさは変えられない）
+        if ((w != cfgW || h != cfgH) && recorder != null) ui.post { toggleRecording() }
         synchronized(decLock) {
             cfgW = w; cfgH = h; cfgSps = sps; cfgPps = pps; cfgVps = vps; cfgCodec = codec
             restartDecoderLocked()
@@ -737,6 +1004,7 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
                 r
             }
         } ?: return
+        recorder?.let { r -> try { r.write(data, offset, length, pcTimeUs, key) } catch (_: Exception) {} }
         if (!ok) requestIdr()
         else if (key) ui.post { if (message.visibility == View.VISIBLE) hideMessage() }
     }
@@ -890,6 +1158,10 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
         target.setOnTouchListener { v, e ->
             touched()
             touchView = v
+            if (magOn && v === video && !isPen(e)) {
+                handleMagnify(v, e)
+                return@setOnTouchListener true
+            }
             if (prefs.touchpad && !isPen(e)) {
                 touchpad(v, e)
                 return@setOnTouchListener true
@@ -1211,6 +1483,7 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
     override fun onDestroy() {
         ui.removeCallbacksAndMessages(null)
         Discovery.stop()
+        recorder?.let { r -> recorder = null; Thread { r.stop() }.start() }
         try { clipboard.removePrimaryClipChangedListener(clipListener) } catch (_: Exception) {}
         receiving.values.forEach { it.finish() }
         synchronized(audioLock) {

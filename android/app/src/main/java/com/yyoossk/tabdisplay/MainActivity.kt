@@ -15,6 +15,7 @@ import android.widget.LinearLayout
 import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.ScrollView
+import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import com.google.zxing.integration.android.IntentIntegrator
@@ -160,6 +161,28 @@ class MainActivity : Activity() {
             isChecked = prefs.haptic
             setOnCheckedChangeListener { _, b -> prefs.haptic = b }
         })
+        // 明るさ・暖色・コントラスト
+        fun slider(label: Int, value: Int, max: Int, fmt: (Int) -> String, set: (Int) -> Unit) {
+            val t = body("")
+            fun show(v: Int) { t.text = getString(label) + "：" + fmt(v) }
+            show(value)
+            col.addView(t)
+            col.addView(SeekBar(this).apply {
+                this.max = max
+                progress = value
+                setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(sb: SeekBar?, p: Int, fromUser: Boolean) { set(p); show(p) }
+                    override fun onStartTrackingTouch(sb: SeekBar?) {}
+                    override fun onStopTrackingTouch(sb: SeekBar?) {}
+                })
+            })
+        }
+        slider(R.string.opt_brightness, maxOf(0, prefs.brightness), 100,
+            { if (it < 10) getString(R.string.brightness_system) else "$it%" },
+            { prefs.brightness = if (it < 10) -1 else it })
+        slider(R.string.opt_warmth, prefs.warmth, 100, { "$it%" }, { prefs.warmth = it })
+        slider(R.string.opt_contrast, prefs.contrast - 50, 100, { "${it + 50}%" }, { prefs.contrast = it + 50 })
+
         col.addView(body(getString(R.string.opt_quality)))
         val group = RadioGroup(this)
         listOf(100 to R.string.quality_full, 75 to R.string.quality_75, 50 to R.string.quality_50).forEach { (q, label) ->

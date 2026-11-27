@@ -45,6 +45,8 @@ class Connection(
         fun onFileBegin(id: Int, name: String, size: Long)
         fun onFileData(id: Int, data: ByteArray)
         fun onFileEnd(id: Int)
+        fun onNotify(app: String, title: String, body: String)
+        fun contrast(): Double
     }
 
     @Volatile private var closed = false
@@ -197,6 +199,10 @@ class Connection(
                     listener.onAudioConfig(j.optInt("rate", 48000), j.optInt("ch", 2))
                 }
                 Protocol.P_AUDIO -> listener.onAudio(m.data)
+                Protocol.P_NOTIFY -> {
+                    val j = JSONObject(String(m.data, Charsets.UTF_8))
+                    listener.onNotify(j.optString("app"), j.optString("title"), j.optString("body"))
+                }
                 Protocol.P_CLIP -> listener.onClip(JSONObject(String(m.data, Charsets.UTF_8)).optString("s"))
                 Protocol.P_FILE_BEGIN -> {
                     val j = JSONObject(String(m.data, Charsets.UTF_8))
@@ -231,6 +237,7 @@ class Connection(
         j.put("id", listener.deviceId())
         j.put("inputOnly", listener.inputOnly())
         j.put("hevc", VideoDecoder.canHevc(w, h))
+        j.put("contrast", listener.contrast())
         j.put("name", (Build.MANUFACTURER + " " + Build.MODEL).trim())
         j.put("w", w)
         j.put("h", h)

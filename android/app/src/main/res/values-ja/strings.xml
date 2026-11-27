@@ -34,7 +34,7 @@
     <string name="opt_audio">PC の音を鳴らす</string>
     <string name="gestures">タップ：クリック ／ 長押し：右クリック ／ なぞる：スクロール\n2 本指タップ：右クリック ／ つまむ・広げる：拡大縮小 ／ ペン：筆圧つきのペン入力\n⌨ ボタン：キーボード</string>
     <string name="notes_title">注意</string>
-    <string name="notes">・タブレットを 2 台以上つないでいるときに、1 台つないだり外したりすると、全部のタブレットの映像が数秒止まります。\n・画質が自動で変わるとき・タブレットを回したときは、映像がごく短く止まります。\n・通信はすべて暗号化しています。Wi-Fi で初めてつなぐときは PC の QR コードを読んでください（PC の確認に使います）。\n・PC で管理者として動いているソフトの窓は、タブレットから操作できません。\n・ペンの筆圧・傾きは、PC が Windows 10（1809）以降のときに使えます。\n・PC の音は、少し遅れて鳴ります。\n・USB は「USB デバッグ」をオンに、Wi-Fi は PC と同じネットワークにつないでください。\n・つないでいる間は画面がつきっぱなしになるので、電池を多く使います。充電しながらの利用がおすすめです。\n・ゲームパッドのボタンは、PC にはキーボードのキーとして届きます。\n・「この端末の画面をほかのタブレットに映す」では、受ける側からの操作はタップ・長押し・スクロール・簡単な文字入力だけです（ペンの筆圧・ショートカットは使えません）。\n・クリップボードの共有は文字だけです。PC から届いたファイルは「Download/TabDisplay」（Android 9 までは アプリのフォルダー）に保存します。\n・自動更新を使うには、TabDisplay からのアプリのインストールを許可してください。</string>
+    <string name="notes">・タブレットを 2 台以上つないでいるときに、1 台つないだり外したりすると、全部のタブレットの映像が数秒止まります。\n・画質が自動で変わるとき・タブレットを回したときは、映像がごく短く止まります。\n・通信はすべて暗号化しています。Wi-Fi で初めてつなぐときは PC の QR コードを読んでください（PC の確認に使います）。\n・PC で管理者として動いているソフトの窓は、タブレットから操作できません。\n・ペンの筆圧・傾きは、PC が Windows 10（1809）以降のときに使えます。\n・PC の音は、少し遅れて鳴ります。\n・USB は「USB デバッグ」をオンに、Wi-Fi は PC と同じネットワークにつないでください。\n・つないでいる間は画面がつきっぱなしになるので、電池を多く使います。充電しながらの利用がおすすめです。\n・ゲームパッドのボタンは、PC にはキーボードのキーとして届きます。\n・「この端末の画面をほかのタブレットに映す」では、受ける側からの操作はタップ・長押し・スクロール・簡単な文字入力だけです（ペンの筆圧・ショートカットは使えません）。\n・クリップボードの共有は文字だけです。PC から届いたファイルは「Download/TabDisplay」（Android 9 までは アプリのフォルダー）に保存します。\n・自動更新を使うには、TabDisplay からのアプリのインストールを許可してください。\n・コントラストを変えると、PC 側で絵を作り直すので、PC の負担が少し増えます。\n・録画には音は入りません。画面写真は Android 7 以降で使えます。</string>
     <string name="sc_copy">コピー</string>
     <string name="sc_paste">貼り付け</string>
     <string name="sc_cut">切り取り</string>
@@ -60,7 +60,7 @@
     <string name="input_only_on">ペンタブレットモード：映像は出しません。タブレットの面が PC の主画面に当たります。</string>
     <string name="input_only_off">映像を出すモードに戻しました</string>
     <string name="no_region">PC で映すウィンドウが見つかりません。</string>
-    <string name="buttons_help">右下のボタン：☰ ショートカット ／ 🎮 ゲームパッド ／ ◧ 左端に「右」「中」ボタンとスクロールの帯（「右」「中」を押しながら画面をタップ）／ ✎ ペンタブレットモード（映像なし）／ 🖱 タッチパッドモード ／ ⌨ キーボード\nゲームパッドのボタンはキーとして送ります：十字＝矢印、A＝X、B＝Z、X＝S、Y＝A、L＝Q、R＝W、START＝Enter、SELECT＝右 Shift</string>
+    <string name="buttons_help">右下のボタン：🔍 拡大鏡 ／ ▤ 画面を分ける ／ ☰ ショートカット・ファイル・画面写真・録画 ／ 🎮 ゲームパッド ／ ◧ 左端に「右」「中」ボタンとスクロールの帯（「右」「中」を押しながら画面をタップ）／ ✎ ペンタブレットモード（映像なし）／ 🖱 タッチパッドモード ／ ⌨ キーボード\nゲームパッドのボタンはキーとして送ります：十字＝矢印、A＝X、B＝Z、X＝S、Y＝A、L＝Q、R＝W、START＝Enter、SELECT＝右 Shift</string>
     <string name="sender_title">この端末の画面をほかのタブレットに映す</string>
     <string name="sender_help">PC はいりません。ほかのタブレットの TabDisplay で「QR コードを読む」を押して、ここに出る QR コードを読み取ってください。2 台は同じ Wi-Fi につないでください。\nほかのタブレットからこの端末を操作するには、ユーザー補助の「TabDisplay」をオンにしてください（Android 7 以降）。タップ・長押し・スクロール・簡単な文字入力ができます。</string>
     <string name="sender_audio">この端末の音も送る（Android 10 以降）</string>
@@ -101,4 +101,27 @@
     <string name="upd_allow">TabDisplay からのアプリのインストールを許可してから、もう一度「更新を確かめる」を押してください。</string>
     <string name="upd_downloading">更新を落としています…</string>
     <string name="log_share">ログを共有</string>
+    <string name="pad_edit">配置を変える</string>
+    <string name="pad_edit_on">配置を変えるモード：ボタンをなぞると動き、タップすると割り当てるキーを選べます。終わったら「配置を変える」をもう一度押します。</string>
+    <string name="pad_edit_off">配置を保存しました</string>
+    <string name="pad_bigger">大きく</string>
+    <string name="pad_smaller">小さく</string>
+    <string name="pad_reset">元に戻す</string>
+    <string name="pad_choose">%1$s に割り当てるキー</string>
+    <string name="mag_on">拡大鏡：2 本指で広げると映像を拡大、なぞると動かす、タップでクリック、長押しで右クリック</string>
+    <string name="mag_off">拡大鏡をやめました</string>
+    <string name="shot_take">画面写真</string>
+    <string name="shot_saved">保存しました：%1$s</string>
+    <string name="shot_failed">画面写真を撮れませんでした</string>
+    <string name="shot_unsupported">画面写真は Android 7 以降で使えます</string>
+    <string name="rec_start">録画を始める</string>
+    <string name="rec_stop">録画を止める</string>
+    <string name="rec_started">録画しています…（音は入りません）</string>
+    <string name="rec_saved">録画を保存しました：%1$s</string>
+    <string name="rec_failed">録画できませんでした</string>
+    <string name="notify_channel">PC の通知</string>
+    <string name="opt_brightness">明るさ</string>
+    <string name="brightness_system">タブレットの設定のまま</string>
+    <string name="opt_warmth">暖色（夜向け）</string>
+    <string name="opt_contrast">コントラスト（PC 側で変えます）</string>
 </resources>

@@ -41,6 +41,7 @@ object Protocol {
     const val P_AUDIO = 16     // PCM 16bit（リトルエンディアン、交互）
     const val P_AREA = 17      // JSON: w, h（入力専用のとき、当てる PC の画面の大きさ）
     const val P_CLIP = 18      // JSON: s（PC でコピーした文字）
+    const val P_NOTIFY = 19    // JSON: app, title, body（PC の通知）
     const val P_FILE_BEGIN = 40
     const val P_FILE_DATA = 41
     const val P_FILE_END = 42
