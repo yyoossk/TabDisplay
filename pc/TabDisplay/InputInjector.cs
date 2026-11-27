@@ -106,7 +106,7 @@ public static class InputInjector
                     Mouse(MOUSEEVENTF_RIGHTUP, 0);
                     break;
                 case "pen":
-                    if (t != null) Pen.Handle(t, j);
+                    if (t != null) PenInput.Handle(t, j);
                     break;
             }
         }
@@ -190,7 +190,7 @@ public static class InputInjector
 /// ペン入力。Windows の「合成ポインター」でペンとして入れるので、ペイントソフトで筆圧が効く。
 /// 使えない Windows（1809 より前）では、マウスの左ボタンで代わりにする。
 /// </summary>
-internal static class Pen
+internal static class PenInput
 {
     private static IntPtr _device;
     private static bool _unsupported;
