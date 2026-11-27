@@ -46,6 +46,9 @@ android {
         }
     }
 
+    // 更新履歴（リポジトリの changelog/CHANGELOG.md を、PC ソフトと同じものをアプリに入れる）
+    sourceSets["main"].assets.srcDirs("../../changelog")
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

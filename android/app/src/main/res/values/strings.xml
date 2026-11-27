@@ -124,4 +124,5 @@
     <string name="brightness_system">same as the tablet setting</string>
     <string name="opt_warmth">Warm color (for night)</string>
     <string name="opt_contrast">Contrast (done on the PC)</string>
+    <string name="changelog">Change history</string>
 </resources>

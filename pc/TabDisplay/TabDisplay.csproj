@@ -25,6 +25,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="vdd_settings.template.xml" LogicalName="vdd_settings.template.xml" />
+    <EmbeddedResource Include="..\..\changelog\CHANGELOG.md" LogicalName="CHANGELOG.md" />
   </ItemGroup>
 
 </Project>

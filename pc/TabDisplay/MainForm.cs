@@ -416,6 +416,7 @@ public sealed class MainForm : Form
                 catch (Exception e) { Log.Write("log bundle: " + e.Message); }
             });
         }));
+        tools.Controls.Add(Btn("btn_changelog", ShowChangelog));
         tools.Controls.Add(Btn("btn_update", () => CheckUpdate(quiet: false)));
         tools.Controls.Add(Btn("btn_hotkeys", () =>
         {
@@ -522,6 +523,36 @@ public sealed class MainForm : Form
                 });
             });
         });
+    }
+
+    /// <summary>更新履歴を見る（ソフトに入れてある CHANGELOG.md）</summary>
+    private void ShowChangelog()
+    {
+        string text;
+        try
+        {
+            using var st = typeof(MainForm).Assembly.GetManifestResourceStream("CHANGELOG.md")!;
+            using var r = new StreamReader(st);
+            text = r.ReadToEnd();
+        }
+        catch { text = ""; }
+        using var f = new Form
+        {
+            Text = L.T("btn_changelog") + " — " + Updater.CurrentLabel,
+            Width = 640,
+            Height = 600,
+            StartPosition = FormStartPosition.CenterParent,
+        };
+        f.Controls.Add(new TextBox
+        {
+            Multiline = true,
+            ReadOnly = true,
+            ScrollBars = ScrollBars.Vertical,
+            Dock = DockStyle.Fill,
+            Text = text.Replace("\r\n", "\n").Replace("\n", Environment.NewLine),
+            Font = new Font(Font.FontFamily, 10),
+        });
+        f.ShowDialog(this);
     }
 
     private void SaveApps()
@@ -810,6 +841,7 @@ public sealed class MainForm : Form
         m.Items.Add(rotate);
         m.Items.Add(audio);
         m.Items.Add(new ToolStripSeparator());
+        m.Items.Add(L.T("btn_changelog"), null, (_, _) => { ShowFromTray(); ShowChangelog(); });
         m.Items.Add(L.T("tray_exit"), null, (_, _) => ExitApp());
 
         // 開くたびに今の状態をチェックに出す

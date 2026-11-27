@@ -67,6 +67,7 @@ GitHub の Secrets（KEYSTORE_BASE64 など）に自分の鍵を入れれば、�
 android/   タブレット用アプリ（Kotlin、minSdk 23 = Android 6）
 pc/        PC 用ソフト（C# / .NET 8 / Windows Forms）
 installer/ インストーラー（Inno Setup）
+changelog/ 更新履歴（CHANGELOG.md。PC ソフトとタブレットアプリの「更新履歴」で見られる）
 .github/workflows/build.yml   ビルド（手で実行。APK・インストーラー・PC 用 zip・ソース zip をリリースに置く）
 ```
 

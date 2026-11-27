@@ -124,4 +124,5 @@
     <string name="brightness_system">タブレットの設定のまま</string>
     <string name="opt_warmth">暖色（夜向け）</string>
     <string name="opt_contrast">コントラスト（PC 側で変えます）</string>
+    <string name="changelog">更新履歴</string>
 </resources>

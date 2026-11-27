@@ -207,6 +207,10 @@ class MainActivity : Activity() {
             setOnClickListener { AppUpdate.check(this@MainActivity, quiet = false) }
         })
         tools.addView(Button(this).apply {
+            setText(R.string.changelog)
+            setOnClickListener { showChangelog() }
+        })
+        tools.addView(Button(this).apply {
             setText(R.string.log_share)
             setOnClickListener { shareLog() }
         })
@@ -280,6 +284,23 @@ class MainActivity : Activity() {
             })
             shortcutBox.addView(row)
         }
+    }
+
+    /** 更新履歴を見る（アプリに入れてある CHANGELOG.md） */
+    private fun showChangelog() {
+        val text = try { assets.open("CHANGELOG.md").bufferedReader().readText() } catch (_: Exception) { "" }
+        val tv = TextView(this).apply {
+            this.text = text
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setTextIsSelectable(true)
+            val p = dp(16)
+            setPadding(p, p, p, p)
+        }
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.changelog) + " — build " + AppUpdate.currentBuild(this))
+            .setView(ScrollView(this).apply { addView(tv) })
+            .setPositiveButton(R.string.guide_close, null)
+            .show()
     }
 
     /** はじめの案内：USB デバッグのオンのしかた・Wi-Fi・USB テザリング */
