@@ -1,6 +1,8 @@
 package com.yyoossk.tabdisplay
 
 import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Color
@@ -20,7 +22,9 @@ import android.view.ViewConfiguration
 import android.view.KeyEvent
 import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
+import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import org.json.JSONArray
@@ -48,6 +52,9 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
     private lateinit var tpButton: TextView
     private lateinit var sideBar: LinearLayout
     private lateinit var padView: View
+    private lateinit var splitPanel: LinearLayout
+    private lateinit var splitButtons: LinearLayout
+    private lateinit var splitButton: TextView
     private lateinit var strip: LinearLayout
     private lateinit var gamepad: FrameLayout
     private lateinit var ioButton: TextView
@@ -58,6 +65,18 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
     /** 左端の「右」「中」を押している間は、タップがその ボタンのクリックになる */
     @Volatile private var rHeld = false
     @Volatile private var mHeld = false
+    // クリップボード・ファイル
+    private val clipboard by lazy { getSystemService(CLIPBOARD_SERVICE) as ClipboardManager }
+    @Volatile private var lastRemoteClip: String? = null
+    private val receiving = java.util.concurrent.ConcurrentHashMap<Int, FileReceiver>()
+    private val clipListener = ClipboardManager.OnPrimaryClipChangedListener {
+        if (!prefs.clipboard) return@OnPrimaryClipChangedListener
+        val t = try { clipboard.primaryClip?.getItemAt(0)?.coerceToText(this)?.toString() } catch (_: Exception) { null }
+        if (t != null && t != lastRemoteClip && t.length < 512 * 1024) {
+            lastRemoteClip = t
+            conn?.post(Protocol.T_CLIP, JSONObject().put("s", t))
+        }
+    }
     /** いまさわっている面（映像か、入力専用の面） */
     private var touchView: View? = null
     private lateinit var sideScroll: ScrollView
@@ -80,6 +99,8 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
     private var cfgH = 0
     private var cfgSps: ByteArray? = null
     private var cfgPps: ByteArray? = null
+    private var cfgVps: ByteArray? = null
+    private var cfgCodec = "h264"
     private var lastIdrRequest = 0L
     private val decoderErrors = ArrayList<Long>()
 
@@ -157,7 +178,11 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
             gamepad.visibility = if (gamepad.visibility == View.VISIBLE) View.GONE else View.VISIBLE
             updateModeButtons()
         }
-        for (b in listOf(menuButton, padButton, stripButton, ioButton, tpButton, kbButton)) {
+        splitButton = roundButton("▤") {
+            prefs.split = !prefs.split
+            applySplit()
+        }
+        for (b in listOf(menuButton, splitButton, padButton, stripButton, ioButton, tpButton, kbButton)) {
             buttons.addView(b, LinearLayout.LayoutParams(dp(44), dp(44)).apply { setMargins(0, dp(6), 0, 0) })
         }
         root.addView(buttons, FrameLayout.LayoutParams(
@@ -175,6 +200,7 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
             dp(120), FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.END or Gravity.CENTER_VERTICAL).apply {
             setMargins(0, 0, dp(60), 0)
         })
+        buildSplitPanel()
         buildShortcuts()
         buildStrip()
         buildGamepad()
@@ -182,7 +208,8 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
         updateModeButtons()
         setContentView(root)
         Discovery.start(this)
-        root.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> layoutVideo(); layoutPad() }
+        clipboard.addPrimaryClipChangedListener(clipListener)
+        root.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> layoutVideo(); layoutPad(); layoutSplitPanel() }
 
         setupTouch(video)
         setupTouch(padView)
@@ -213,12 +240,96 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
 
     override fun onResume() {
         super.onResume()
+        applySplit()
         buildShortcuts()
         updateTouchpadButton()
     }
 
+    // ---------- 画面を分ける（上＝PC の画面、下＝ボタンとメモ） ----------
+
+    private fun buildSplitPanel() {
+        splitPanel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(0xFF263238.toInt())
+            visibility = View.GONE
+        }
+        splitButtons = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        splitPanel.addView(HorizontalScrollView(this).apply { addView(splitButtons) },
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        splitPanel.addView(EditText(this).apply {
+            setText(prefs.memo)
+            setHint(R.string.memo_hint)
+            setTextColor(Color.WHITE)
+            setHintTextColor(Color.GRAY)
+            gravity = Gravity.TOP or Gravity.START
+            setBackgroundColor(0xFF37474F.toInt())
+            setPadding(dp(8), dp(8), dp(8), dp(8))
+            addTextChangedListener(object : android.text.TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun afterTextChanged(e: android.text.Editable?) { prefs.memo = e?.toString() ?: "" }
+            })
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f).apply {
+            setMargins(dp(8), dp(4), dp(70), dp(8))
+        })
+        root.addView(splitPanel, 2, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, 1, Gravity.BOTTOM))
+    }
+
+    private fun layoutSplitPanel() {
+        if (!::splitPanel.isInitialized) return
+        val lp = splitPanel.layoutParams as FrameLayout.LayoutParams
+        val h = root.height - availHeight()
+        if (lp.height != h && h > 0) {
+            lp.height = h
+            splitPanel.layoutParams = lp
+        }
+    }
+
+    private fun applySplit() {
+        if (!::splitPanel.isInitialized) return
+        splitPanel.visibility = if (prefs.split) View.VISIBLE else View.GONE
+        splitButton.alpha = if (prefs.split) 1f else 0.6f
+        splitButton.setBackgroundColor(if (prefs.split) 0xCC1E88E5.toInt() else 0x66000000)
+        layoutVideo()
+        layoutPad()
+        layoutSplitPanel()
+        // PC 側の画面の大きさも合わせる
+        sendSizeIfChanged()
+    }
+
     private fun buildShortcuts() {
+        if (::splitButtons.isInitialized) {
+            // 画面を分けたときの下のボタン（大きめ）
+            splitButtons.removeAllViews()
+            for (id in prefs.shortcuts) {
+                val item = Shortcuts.byId(id) ?: continue
+                splitButtons.addView(TextView(this).apply {
+                    setText(item.label)
+                    setTextColor(Color.WHITE)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                    gravity = Gravity.CENTER
+                    setBackgroundColor(0x44FFFFFF)
+                    setPadding(dp(14), dp(12), dp(14), dp(12))
+                    setOnClickListener {
+                        if (prefs.haptic) performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                        val a = JSONArray()
+                        item.vks.forEach { a.put(it) }
+                        conn?.post(Protocol.T_INPUT, JSONObject().put("k", "combo").put("vks", a))
+                    }
+                }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                    setMargins(dp(4), dp(6), dp(4), dp(2))
+                })
+            }
+        }
         sideBar.removeAllViews()
+        sideBar.addView(TextView(this).apply {
+            setText(R.string.file_send)
+            setTextColor(Color.YELLOW)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+            gravity = Gravity.CENTER
+            setPadding(dp(6), dp(12), dp(6), dp(12))
+            setOnClickListener { pickFilesToSend() }
+        })
         for (id in prefs.shortcuts) {
             val item = Shortcuts.byId(id) ?: continue
             sideBar.addView(TextView(this).apply {
@@ -285,10 +396,10 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
         val p = Point()
         @Suppress("DEPRECATION")
         windowManager.defaultDisplay.getRealSize(p)
+        // 画面を分けているときは、上の部分だけを PC の画面にする
+        if (prefs.split) p.y = p.y * SPLIT / 100
         val q = prefs.quality.coerceIn(25, 100)
-        val s = VideoDecoder.fitSize(p.x * q / 100, p.y * q / 100)
-        lastSentSize = s
-        return s
+        return VideoDecoder.fitSize(p.x * q / 100, p.y * q / 100)
     }
 
     /** PC の文字の大きさを決めるための値（解像度を下げているときはその分小さく） */
@@ -312,22 +423,112 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
     }
 
     /** 映像の縦横比を保ったまま、画面いっぱいに置く */
+    /** PC の画面に使える高さ（画面を分けているときは上の部分だけ） */
+    private fun availHeight() = if (prefs.split) root.height * SPLIT / 100 else root.height
+    private fun videoGravity() = if (prefs.split) Gravity.TOP or Gravity.CENTER_HORIZONTAL else Gravity.CENTER
+
     private fun layoutVideo() {
         val w = cfgW
         val h = cfgH
         val rw = root.width
-        val rh = root.height
+        val rh = availHeight()
         if (w <= 0 || h <= 0 || rw <= 0 || rh <= 0) return
         val scale = minOf(rw.toFloat() / w, rh.toFloat() / h)
         val lw = (w * scale).toInt()
         val lh = (h * scale).toInt()
         val lp = video.layoutParams as FrameLayout.LayoutParams
-        if (lp.width != lw || lp.height != lh) {
+        if (lp.width != lw || lp.height != lh || lp.gravity != videoGravity()) {
             lp.width = lw
             lp.height = lh
-            lp.gravity = Gravity.CENTER
+            lp.gravity = videoGravity()
             video.layoutParams = lp
         }
+        layoutSplitPanel()
+    }
+
+    // ---------- クリップボード・ファイル ----------
+
+    override fun onClip(text: String) {
+        if (!prefs.clipboard) return
+        ui.post {
+            lastRemoteClip = text
+            try { clipboard.setPrimaryClip(ClipData.newPlainText("TabDisplay", text)) } catch (_: Exception) {}
+        }
+    }
+
+    override fun onFileBegin(id: Int, name: String, size: Long) {
+        try {
+            receiving[id] = FileReceiver(this, name)
+            ui.post { Toast.makeText(this, getString(R.string.file_receiving, name), Toast.LENGTH_SHORT).show() }
+        } catch (e: Exception) {
+            ui.post { Toast.makeText(this, getString(R.string.file_failed, name), Toast.LENGTH_LONG).show() }
+        }
+    }
+
+    override fun onFileData(id: Int, data: ByteArray) {
+        try { receiving[id]?.write(data, 4, data.size - 4) } catch (_: Exception) {}
+    }
+
+    override fun onFileEnd(id: Int) {
+        val r = receiving.remove(id) ?: return
+        r.finish()
+        ui.post { Toast.makeText(this, getString(R.string.file_saved, r.where), Toast.LENGTH_LONG).show() }
+    }
+
+    /** タブレットのファイルを選んで PC に送る（PC の「ダウンロード\TabDisplay」に保存される） */
+    private fun pickFilesToSend() {
+        val i = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+        }
+        @Suppress("DEPRECATION")
+        startActivityForResult(i, REQ_SEND_FILES)
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        @Suppress("DEPRECATION")
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != REQ_SEND_FILES || resultCode != RESULT_OK || data == null) return
+        val uris = ArrayList<android.net.Uri>()
+        data.clipData?.let { c -> for (k in 0 until c.itemCount) uris.add(c.getItemAt(k).uri) }
+        if (uris.isEmpty()) data.data?.let { uris.add(it) }
+        val c = conn ?: return
+        Thread {
+            var id = (SystemClock.elapsedRealtime() and 0x7fffffff).toInt()
+            for (u in uris) {
+                id++
+                val name = queryName(u)
+                try {
+                    contentResolver.openInputStream(u)?.use { input ->
+                        c.send(Protocol.T_FILE_BEGIN, JSONObject().put("id", id).put("name", name))
+                        val buf = ByteArray(256 * 1024 + 4)
+                        buf[0] = (id ushr 24).toByte(); buf[1] = (id ushr 16).toByte()
+                        buf[2] = (id ushr 8).toByte(); buf[3] = id.toByte()
+                        while (true) {
+                            val n = input.read(buf, 4, buf.size - 4)
+                            if (n <= 0) break
+                            c.send(Protocol.T_FILE_DATA, buf.copyOf(4 + n))
+                            Thread.sleep(2)
+                        }
+                        c.send(Protocol.T_FILE_END, JSONObject().put("id", id))
+                    }
+                    ui.post { Toast.makeText(this, getString(R.string.file_sent, name), Toast.LENGTH_SHORT).show() }
+                } catch (e: Exception) {
+                    ui.post { Toast.makeText(this, getString(R.string.file_failed, name), Toast.LENGTH_LONG).show() }
+                }
+            }
+        }.start()
+    }
+
+    private fun queryName(u: android.net.Uri): String {
+        try {
+            contentResolver.query(u, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
+                if (it.moveToFirst()) return it.getString(0)
+            }
+        } catch (_: Exception) {}
+        return u.lastPathSegment ?: "file"
     }
 
     // ---------- 入力専用（ペンタブレット） ----------
@@ -344,14 +545,15 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
     /** PC の画面と同じ縦横比で、タブレットいっぱいに置く */
     private fun layoutPad() {
         val rw = root.width
-        val rh = root.height
+        val rh = availHeight()
         if (rw <= 0 || rh <= 0) return
         val scale = minOf(rw.toFloat() / areaW, rh.toFloat() / areaH)
         val lp = padView.layoutParams as FrameLayout.LayoutParams
         val lw = (areaW * scale).toInt()
         val lh = (areaH * scale).toInt()
-        if (lp.width != lw || lp.height != lh) {
+        if (lp.width != lw || lp.height != lh || lp.gravity != videoGravity()) {
             lp.width = lw; lp.height = lh
+            lp.gravity = videoGravity()
             padView.layoutParams = lp
         }
     }
@@ -493,13 +695,14 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
     override fun onConnected(host: String) {
         ui.post {
             target?.let { prefs.remember(it) }
+            lastSentSize = currentSize() // 接続のときに送った大きさ
             showMessage(getString(R.string.waiting_video))
         }
     }
 
-    override fun onConfig(w: Int, h: Int, fps: Int, sps: ByteArray, pps: ByteArray) {
+    override fun onConfig(w: Int, h: Int, fps: Int, codec: String, vps: ByteArray?, sps: ByteArray, pps: ByteArray) {
         synchronized(decLock) {
-            cfgW = w; cfgH = h; cfgSps = sps; cfgPps = pps
+            cfgW = w; cfgH = h; cfgSps = sps; cfgPps = pps; cfgVps = vps; cfgCodec = codec
             restartDecoderLocked()
         }
         ui.post {
@@ -515,7 +718,8 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
         val pps = cfgPps ?: return
         if (!surfaceReady || cfgW <= 0) return
         try {
-            decoder = VideoDecoder(video.holder.surface, cfgW, cfgH, sps, pps, this).also { it.start() }
+            val mime = if (cfgCodec == "hevc") VideoDecoder.HEVC else VideoDecoder.MIME
+            decoder = VideoDecoder(video.holder.surface, cfgW, cfgH, sps, pps, this, mime, cfgVps).also { it.start() }
         } catch (e: Exception) {
             noteDecoderError()
         }
@@ -1007,6 +1211,8 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
     override fun onDestroy() {
         ui.removeCallbacksAndMessages(null)
         Discovery.stop()
+        try { clipboard.removePrimaryClipChangedListener(clipListener) } catch (_: Exception) {}
+        receiving.values.forEach { it.finish() }
         synchronized(audioLock) {
             audio?.release()
             audio = null
@@ -1021,4 +1227,10 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
     }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density + 0.5f).toInt()
+
+    companion object {
+        private const val REQ_SEND_FILES = 7
+        /** 画面を分けるとき、PC の画面に使う高さ（%） */
+        private const val SPLIT = 65
+    }
 }

@@ -78,7 +78,9 @@ public sealed class QrForm : Form
                 if (a.Address.AddressFamily != AddressFamily.InterNetwork) continue;
                 var ip = a.Address.ToString();
                 if (ip.StartsWith("169.254.")) continue;
-                int score = (hasGateway ? 2 : 0) + (isVirtual ? 0 : 1) +
+                // USB テザリング（RNDIS）は最優先（ケーブルなので速くて安定）
+                var tether = name.Contains("remote ndis") || name.Contains("rndis");
+                int score = (tether ? 10 : 0) + (hasGateway ? 2 : 0) + (isVirtual && !tether ? 0 : 1) +
                             (ni.NetworkInterfaceType == NetworkInterfaceType.Wireless80211 ? 1 : 0);
                 list.Add((ip, score));
             }

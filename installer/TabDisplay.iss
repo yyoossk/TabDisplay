@@ -55,6 +55,8 @@ Source: "{#SrcDir}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs 
 Name: "{group}\TabDisplay"; Filename: "{app}\TabDisplay.exe"
 Name: "{group}\{cm:UninstallProgram,TabDisplay}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\TabDisplay"; Filename: "{app}\TabDisplay.exe"; Tasks: desktopicon
+; エクスプローラーの右クリック →「送る」→「TabDisplay」で、ファイルをタブレットへ
+Name: "{usersendto}\TabDisplay"; Filename: "{app}\TabDisplay.exe"; Parameters: "--send"
 
 [Registry]
 ; Windows の起動時に開く（ソフトの設定画面と同じ場所・同じ値）
@@ -63,9 +65,21 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 [Run]
 Filename: "{app}\TabDisplay.exe"; Parameters: "--install-driver"; StatusMsg: "{cm:Installing}"; Tasks: driver; Flags: runhidden waituntilterminated
 Filename: "{app}\TabDisplay.exe"; Description: "{cm:LaunchProgram,TabDisplay}"; Flags: nowait postinstall skipifsilent runasoriginaluser
+; 自動更新（静かなインストール）のあとは、そのまま開き直す
+Filename: "{app}\TabDisplay.exe"; Flags: nowait runasoriginaluser; Check: WizardSilent
 
 [UninstallRun]
 Filename: "{app}\TabDisplay.exe"; Parameters: "--uninstall-driver"; StatusMsg: "{cm:Removing}"; Flags: runhidden waituntilterminated; RunOnceId: "RemoveDriver"
+
+[Code]
+// 更新で上書きする前に、動いている TabDisplay を閉じる（CloseApplications でも閉じるが念のため）
+function InitializeSetup(): Boolean;
+var
+  Code: Integer;
+begin
+  Exec('taskkill.exe', '/IM TabDisplay.exe /F', '', SW_HIDE, ewWaitUntilTerminated, Code);
+  Result := True;
+end;
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}"

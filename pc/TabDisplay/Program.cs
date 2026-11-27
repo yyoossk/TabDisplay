@@ -6,6 +6,8 @@ internal static class Program
 {
     private const string MutexName = "TabDisplay.SingleInstance";
     public const string ShowEventName = "TabDisplay.ShowWindow";
+    public const string SendEventName = "TabDisplay.SendFiles";
+    public static string SendQueueFile => Path.Combine(AppSettings.Dir, "send-queue.txt");
 
     [STAThread]
     private static int Main(string[] args)
@@ -19,9 +21,26 @@ internal static class Program
             return 0;
         }
 
+        // エクスプローラーの「送る」→「TabDisplay」：送るファイルを書き置きして、開いている TabDisplay に知らせる
+        var sendIdx = Array.IndexOf(args, "--send");
+        if (sendIdx >= 0)
+        {
+            try
+            {
+                Directory.CreateDirectory(AppSettings.Dir);
+                File.AppendAllLines(SendQueueFile, args.Skip(sendIdx + 1).Where(a => !a.StartsWith("--")));
+            }
+            catch { }
+        }
+
         using var mutex = new Mutex(true, MutexName, out var first);
         if (!first)
         {
+            if (sendIdx >= 0)
+            {
+                try { EventWaitHandle.OpenExisting(SendEventName).Set(); } catch { }
+                return 0;
+            }
             // もう開いていれば、そちらの窓を出す
             try { EventWaitHandle.OpenExisting(ShowEventName).Set(); } catch { }
             return 0;

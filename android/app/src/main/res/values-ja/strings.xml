@@ -34,7 +34,7 @@
     <string name="opt_audio">PC の音を鳴らす</string>
     <string name="gestures">タップ：クリック ／ 長押し：右クリック ／ なぞる：スクロール\n2 本指タップ：右クリック ／ つまむ・広げる：拡大縮小 ／ ペン：筆圧つきのペン入力\n⌨ ボタン：キーボード</string>
     <string name="notes_title">注意</string>
-    <string name="notes">・タブレットを 2 台以上つないでいるときに、1 台つないだり外したりすると、全部のタブレットの映像が数秒止まります。\n・画質が自動で変わるとき・タブレットを回したときは、映像がごく短く止まります。\n・通信はすべて暗号化しています。Wi-Fi で初めてつなぐときは PC の QR コードを読んでください（PC の確認に使います）。\n・PC で管理者として動いているソフトの窓は、タブレットから操作できません。\n・ペンの筆圧・傾きは、PC が Windows 10（1809）以降のときに使えます。\n・PC の音は、少し遅れて鳴ります。\n・USB は「USB デバッグ」をオンに、Wi-Fi は PC と同じネットワークにつないでください。\n・つないでいる間は画面がつきっぱなしになるので、電池を多く使います。充電しながらの利用がおすすめです。\n・ゲームパッドのボタンは、PC にはキーボードのキーとして届きます。\n・「この端末の画面をほかのタブレットに映す」では、受ける側からの操作はタップ・長押し・スクロール・簡単な文字入力だけです（ペンの筆圧・ショートカットは使えません）。</string>
+    <string name="notes">・タブレットを 2 台以上つないでいるときに、1 台つないだり外したりすると、全部のタブレットの映像が数秒止まります。\n・画質が自動で変わるとき・タブレットを回したときは、映像がごく短く止まります。\n・通信はすべて暗号化しています。Wi-Fi で初めてつなぐときは PC の QR コードを読んでください（PC の確認に使います）。\n・PC で管理者として動いているソフトの窓は、タブレットから操作できません。\n・ペンの筆圧・傾きは、PC が Windows 10（1809）以降のときに使えます。\n・PC の音は、少し遅れて鳴ります。\n・USB は「USB デバッグ」をオンに、Wi-Fi は PC と同じネットワークにつないでください。\n・つないでいる間は画面がつきっぱなしになるので、電池を多く使います。充電しながらの利用がおすすめです。\n・ゲームパッドのボタンは、PC にはキーボードのキーとして届きます。\n・「この端末の画面をほかのタブレットに映す」では、受ける側からの操作はタップ・長押し・スクロール・簡単な文字入力だけです（ペンの筆圧・ショートカットは使えません）。\n・クリップボードの共有は文字だけです。PC から届いたファイルは「Download/TabDisplay」（Android 9 までは アプリのフォルダー）に保存します。\n・自動更新を使うには、TabDisplay からのアプリのインストールを許可してください。</string>
     <string name="sc_copy">コピー</string>
     <string name="sc_paste">貼り付け</string>
     <string name="sc_cut">切り取り</string>
@@ -77,4 +77,28 @@
     <string name="sender_open">この端末の画面をほかのタブレットに映す</string>
     <string name="a11y_label">TabDisplay（ほかのタブレットからの操作）</string>
     <string name="a11y_description">この端末の画面を TabDisplay でほかのタブレットに映している間だけ、そのタブレットでのタップやスクロールを、この端末のタップやスクロールにするために使います。</string>
+    <string name="file_receiving">%1$s を受け取っています…</string>
+    <string name="file_saved">保存しました：%1$s</string>
+    <string name="file_sent">PC に送りました：%1$s</string>
+    <string name="file_failed">%1$s を送れませんでした</string>
+    <string name="file_send">ファイルを PC に送る</string>
+    <string name="opt_clip">クリップボード（コピーした文字）を PC と共有する</string>
+    <string name="opt_split">画面を分ける：上に PC の画面、下にボタンとメモ</string>
+    <string name="memo_hint">メモ（このタブレットに保存されます）</string>
+    <string name="guide_open">準備のしかた</string>
+    <string name="guide_title">準備のしかた</string>
+    <string name="guide_body">USB：「設定」→「タブレット情報（端末情報）」→「ビルド番号」を 7 回タップ →「開発者向けオプション」→「USB デバッグ」をオン。PC に挿して、タブレットに出る「許可」を押し、PC の TabDisplay で「接続する（USB）」を押します。\n\nWi-Fi：PC とタブレットを同じ Wi-Fi につなぎ、PC で「Wi-Fi（QR コード）」を押して、ここの「QR コードを読む」で読み取ります。\n\nUSB デバッグを使わずケーブルで：PC に挿して、タブレットで「USB テザリング」をオンにしてから、PC の QR コードを読み取ります。</string>
+    <string name="guide_dev">開発者向けオプション</string>
+    <string name="guide_about">タブレット情報</string>
+    <string name="guide_close">閉じる</string>
+    <string name="tether_title">ケーブルでつなぐ（USB テザリング）</string>
+    <string name="tether_body">USB デバッグはいりません。PC に挿して「USB テザリング」をオンにし、PC の「Wi-Fi（QR コード）」で出る QR コードを読み取ります。</string>
+    <string name="tether_open">テザリングの設定を開く</string>
+    <string name="upd_check">更新を確かめる</string>
+    <string name="upd_new">新しい版（%1$s）があります。更新しますか？</string>
+    <string name="upd_none">最新の版です（build %1$d）</string>
+    <string name="upd_fail">更新できませんでした</string>
+    <string name="upd_allow">TabDisplay からのアプリのインストールを許可してから、もう一度「更新を確かめる」を押してください。</string>
+    <string name="upd_downloading">更新を落としています…</string>
+    <string name="log_share">ログを共有</string>
 </resources>

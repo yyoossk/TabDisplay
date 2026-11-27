@@ -22,7 +22,8 @@ public record CaptureSpec(
     int OffsetX = 0,          // 画面の一部だけ撮るとき（画面の左上からの位置）
     int OffsetY = 0,
     bool Region = false,
-    bool TextQuality = false); // 文字をくっきり（動きは少しにじんでもよい）
+    bool TextQuality = false, // 文字をくっきり（動きは少しにじんでもよい）
+    bool Hevc = false);       // H.265 で送る（相手が再生できるときだけ）
 
 /// <summary>
 /// ffmpeg で画面を撮って H.264 にする。
@@ -32,7 +33,8 @@ public record CaptureSpec(
 /// </summary>
 public sealed class Capture : IDisposable
 {
-    public event Action<int, int, byte[], byte[]>? Config;          // w, h, sps, pps
+    /// <summary>w, h, 方式（"h264" / "hevc"）, VPS（H.265 のみ）, SPS, PPS</summary>
+    public event Action<int, int, string, byte[]?, byte[], byte[]>? Config;
     public event Action<byte[], bool, long>? Frame;                  // Annex-B, キーフレームか, PC 時刻(μs)
     public event Action<string>? Failed;
 
@@ -56,7 +58,22 @@ public sealed class Capture : IDisposable
         _settings = settings;
     }
 
-    private record Enc(string Name, string Codec, bool GpuFrames, Func<CaptureSpec, string> Args);
+    private record Enc(string Name, string Codec, bool GpuFrames, Func<CaptureSpec, string> Args, bool Hevc = false);
+
+    // H.265：同じ画質で送る量が少ない（グラボが対応しているときだけ）
+    private static readonly Enc[] HevcEncoders =
+    {
+        new("nvenc265", "hevc_nvenc", true, s => s.TextQuality
+            ? $"-c:v hevc_nvenc -preset p4 -tune ll -zerolatency 1 -rc vbr -cq 21 {Rate(s, 1.5)} -bf 0 -g {Gop(s)} -forced-idr 1 -delay 0"
+            : $"-c:v hevc_nvenc -preset p1 -tune ull -zerolatency 1 -rc cbr {Rate(s)} -bf 0 -g {Gop(s)} -forced-idr 1 -delay 0", true),
+        new("amf265", "hevc_amf", true, s => s.TextQuality
+            ? $"-c:v hevc_amf -usage lowlatency -quality quality -rc cqp -qp_i 22 -qp_p 24 -g {Gop(s)} -header_insertion_mode idr"
+            : $"-c:v hevc_amf -usage ultralowlatency -quality speed -rc cbr {Rate(s)} -g {Gop(s)} -header_insertion_mode idr", true),
+        new("qsv265", "hevc_qsv", false, s =>
+            $"-c:v hevc_qsv -preset {(s.TextQuality ? "medium" : "veryfast")} -look_ahead 0 -async_depth 1 {Rate(s)} -bf 0 -g {Gop(s)}", true),
+        new("mf265", "hevc_mf", false, s =>
+            $"-c:v hevc_mf -hw_encoding 1 -scenario display_remoting -rate_control cbr -b:v {s.BitrateMbps}M -bf 0 -g {Gop(s)}", true),
+    };
 
     // 動きをなめらか：遅れ最小・ビットレート一定
     // 文字をくっきり：画質を一定に保つ（変化の少ない画面で文字がにじまない）。上限は設定のビットレートの 1.5 倍
@@ -92,14 +109,22 @@ public sealed class Capture : IDisposable
     /// <summary>うまく動く圧縮方式を探して始める。だめなら false</summary>
     public bool Start()
     {
-        var order = Encoders.OrderByDescending(e => e.Name == _settings.LastEncoder).ToList();
+        // H.265 を使えるなら先に試し、だめなら H.264
+        var order = new List<Enc>();
+        if (Spec.Hevc) order.AddRange(HevcEncoders.OrderByDescending(e => e.Name == _settings.LastEncoderHevc));
+        order.AddRange(Encoders.OrderByDescending(e => e.Name == _settings.LastEncoder));
         foreach (var enc in order)
         {
             if (_stopping) return false;
             if (TryStart(enc))
             {
                 EncoderName = enc.Name;
-                if (_settings.LastEncoder != enc.Name)
+                if (enc.Hevc && _settings.LastEncoderHevc != enc.Name)
+                {
+                    _settings.LastEncoderHevc = enc.Name;
+                    _settings.Save();
+                }
+                else if (!enc.Hevc && _settings.LastEncoder != enc.Name)
                 {
                     _settings.LastEncoder = enc.Name;
                     _settings.Save();
@@ -133,7 +158,7 @@ public sealed class Capture : IDisposable
         if (scale)
             filter.Append($",hwdownload,format=bgra,scale={Spec.OutWidth}:{Spec.OutHeight}:flags=fast_bilinear,format=nv12");
         else if (!enc.GpuFrames)
-            filter.Append(enc.Name == "qsv"
+            filter.Append(enc.Name.StartsWith("qsv")
                 ? ",hwmap=derive_device=qsv,format=qsv"
                 : ",hwdownload,format=bgra,format=nv12");
 
@@ -147,7 +172,7 @@ public sealed class Capture : IDisposable
         {
             KillProcess();
             _gotConfig.Reset();
-            _sps = _pps = null;
+            _sps = _pps = _vps = null;
             try
             {
                 var psi = new ProcessStartInfo(FfmpegPath, args)
@@ -236,42 +261,63 @@ public sealed class Capture : IDisposable
         }
     }
 
+    private byte[]? _vps;
+    private bool _hevc;
+
     private void OnVideoTag(byte[] d)
     {
-        int frameType = d[0] >> 4;
-        int codec = d[0] & 0x0f;
-        if ((d[0] & 0x80) != 0 || codec != 7) return; // H.264（AVC）以外は扱わない
-        int packetType = d[1];
-        if (packetType == 0)
+        int payload;
+        bool key;
+        if ((d[0] & 0x80) != 0)
         {
-            ParseAvcConfig(d, 5);
-            return;
+            // 拡張 FLV（H.265）：[ExHeader|frameType|packetType][FourCC 4][...]
+            int frameType = (d[0] >> 4) & 7;
+            int packetType = d[0] & 0x0f;
+            if (d.Length < 5 || d[1] != 'h' || d[2] != 'v' || d[3] != 'c' || d[4] != '1') return;
+            _hevc = true;
+            if (packetType == 0) { ParseHevcConfig(d, 5); return; }
+            if (packetType == 1) payload = 8;       // CodedFrames（CTS 3 バイトのあと）
+            else if (packetType == 3) payload = 5;  // CodedFramesX（CTS なし）
+            else return;
+            key = frameType == 1;
         }
-        if (packetType != 1) return;
+        else
+        {
+            int frameType = d[0] >> 4;
+            int codec = d[0] & 0x0f;
+            if (codec != 7) return; // H.264（AVC）
+            _hevc = false;
+            if (d[1] == 0) { ParseAvcConfig(d, 5); return; }
+            if (d[1] != 1) return;
+            payload = 5;
+            key = frameType == 1;
+        }
 
-        bool key = frameType == 1;
-        var ms = new MemoryStream(d.Length + 64);
+        var ms = new MemoryStream(d.Length + 128);
         if (key && _sps != null && _pps != null)
         {
+            if (_hevc && _vps != null) WriteNal(ms, _vps);
             WriteNal(ms, _sps);
             WriteNal(ms, _pps);
         }
-        int i = 5;
+        int i = payload;
         while (i + 4 <= d.Length)
         {
             int len = (d[i] << 24) | (d[i + 1] << 16) | (d[i + 2] << 8) | d[i + 3];
             i += 4;
             if (len <= 0 || i + len > d.Length) break;
-            int nalType = d[i] & 0x1f;
-            if (nalType == 7 || nalType == 8)
+            int t = _hevc ? (d[i] >> 1) & 0x3f : d[i] & 0x1f;
+            bool isVps = _hevc && t == 32, isSps = _hevc ? t == 33 : t == 7, isPps = _hevc ? t == 34 : t == 8;
+            bool isAud = _hevc ? t == 35 : t == 9;
+            if (isVps || isSps || isPps)
             {
-                // SPS/PPS が中に入っていたら覚える（エンコーダーによっては設定パケットを出さない）
+                // 設定が中に入っていたら覚える（エンコーダーによっては設定パケットを出さない）
                 var nal = d.AsSpan(i, len).ToArray();
-                if (nalType == 7) _sps = nal; else _pps = nal;
-                if (!_gotConfig.IsSet && _sps != null && _pps != null) EmitConfig();
+                if (isVps) _vps = nal; else if (isSps) _sps = nal; else _pps = nal;
+                if (!_gotConfig.IsSet && _sps != null && _pps != null && (!_hevc || _vps != null)) EmitConfig();
                 if (key) { i += len; continue; } // 先頭に入れたので二重にしない
             }
-            if (nalType == 9) { i += len; continue; } // AUD はいらない
+            if (isAud) { i += len; continue; }
             ms.Write(StartCode);
             ms.Write(d, i, len);
             i += len;
@@ -286,6 +332,37 @@ public sealed class Capture : IDisposable
     {
         ms.Write(StartCode);
         ms.Write(nal);
+    }
+
+    /// <summary>H.265 の設定（HEVCDecoderConfigurationRecord）から VPS・SPS・PPS を取り出す</summary>
+    private void ParseHevcConfig(byte[] d, int o)
+    {
+        try
+        {
+            int n = d[o + 22];
+            int p = o + 23;
+            for (int a = 0; a < n; a++)
+            {
+                int type = d[p] & 0x3f;
+                int count = (d[p + 1] << 8) | d[p + 2];
+                p += 3;
+                for (int k = 0; k < count; k++)
+                {
+                    int len = (d[p] << 8) | d[p + 1];
+                    p += 2;
+                    var nal = d.AsSpan(p, len).ToArray();
+                    if (type == 32) _vps ??= nal;
+                    else if (type == 33) _sps ??= nal;
+                    else if (type == 34) _pps ??= nal;
+                    p += len;
+                }
+            }
+            if (_vps != null && _sps != null && _pps != null) EmitConfig();
+        }
+        catch (Exception e)
+        {
+            Log.Write("hvcC parse: " + e.Message);
+        }
     }
 
     private void ParseAvcConfig(byte[] d, int o)
@@ -325,7 +402,7 @@ public sealed class Capture : IDisposable
 
     private void EmitConfig()
     {
-        Config?.Invoke(Spec.OutWidth, Spec.OutHeight, _sps!, _pps!);
+        Config?.Invoke(Spec.OutWidth, Spec.OutHeight, _hevc ? "hevc" : "h264", _hevc ? _vps : null, _sps!, _pps!);
         _gotConfig.Set();
     }
 

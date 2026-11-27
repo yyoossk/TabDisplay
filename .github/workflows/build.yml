@@ -36,6 +36,7 @@ jobs:
         run: >
           dotnet publish pc/TabDisplay/TabDisplay.csproj -c Release -r win-x64 --self-contained true
           -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none
+          -p:InformationalVersion=build-${{ github.run_number }} -p:IncludeSourceRevisionInInformationalVersion=false
           -o out/TabDisplay
 
       - name: Add tools (ffmpeg, adb, nefcon, virtual display driver)
@@ -84,8 +85,8 @@ jobs:
           # タブレット用アプリ（PC から USB で入れる）
           $apk = Get-ChildItem apk-artifact -Recurse -Filter *.apk | Select-Object -First 1
           Copy-Item $apk.FullName "$out/apk/TabDisplay.apk"
-          $vc = (Select-String -Path android/app/build.gradle.kts -Pattern 'versionCode\s*=\s*(\d+)').Matches[0].Groups[1].Value
-          Set-Content "$out/apk/version.txt" $vc -NoNewline
+          # タブレットのアプリの versionCode はビルド番号（android/app/build.gradle.kts が GITHUB_RUN_NUMBER を読む）
+          Set-Content "$out/apk/version.txt" "${{ github.run_number }}" -NoNewline
           Copy-Item $apk.FullName "out/TabDisplay.apk"
 
           Copy-Item THIRD_PARTY.md "$out/licenses/"
@@ -95,7 +96,7 @@ jobs:
         run: |
           choco install innosetup -y --no-progress
           $ver = (Select-Xml -Path pc/TabDisplay/TabDisplay.csproj -XPath "//Version").Node.InnerText
-          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DSrcDir="$PWD\out\TabDisplay" /DAppVersion=$ver installer\TabDisplay.iss
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DSrcDir="$PWD\out\TabDisplay" /DAppVersion="$ver.${{ github.run_number }}" installer\TabDisplay.iss
           if (-not (Test-Path out/TabDisplay-Setup.exe)) { throw "installer not built" }
 
       - name: Pack

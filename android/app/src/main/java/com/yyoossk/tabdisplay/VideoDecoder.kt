@@ -23,6 +23,9 @@ class VideoDecoder(
     private val sps: ByteArray,
     private val pps: ByteArray,
     private val listener: Listener,
+    /** "video/avc"（H.264）か "video/hevc"（H.265） */
+    private val mime: String = MIME,
+    private val vps: ByteArray? = null,
 ) {
     interface Listener {
         /** 絵を 1 枚表示した。pcTimeUs = PC がその絵を送った時刻 */
@@ -37,9 +40,8 @@ class VideoDecoder(
     private var waitingKey = true
 
     fun start() {
-        val fmt = MediaFormat.createVideoFormat(MIME, width, height)
-        fmt.setByteBuffer("csd-0", ByteBuffer.wrap(START + sps))
-        fmt.setByteBuffer("csd-1", ByteBuffer.wrap(START + pps))
+        val fmt = MediaFormat.createVideoFormat(mime, width, height)
+        setCsd(fmt)
         fmt.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, maxOf(width * height, 512 * 1024))
         fmt.setInteger(MediaFormat.KEY_PRIORITY, 0) // リアルタイム
         if (Build.VERSION.SDK_INT >= 30) {
@@ -52,11 +54,11 @@ class VideoDecoder(
         fmt.setInteger("vendor.rtc-ext-dec-low-latency.enable", 1)
         fmt.setInteger("vendor.low-latency.enable", 1)
 
-        val name = pickDecoderName()
+        val name = bestDecoder(mime)?.name
         val c = try {
-            if (name != null) MediaCodec.createByCodecName(name) else MediaCodec.createDecoderByType(MIME)
+            if (name != null) MediaCodec.createByCodecName(name) else MediaCodec.createDecoderByType(mime)
         } catch (e: Exception) {
-            MediaCodec.createDecoderByType(MIME)
+            MediaCodec.createDecoderByType(mime)
         }
         try {
             c.configure(fmt, surface, null, 0)
@@ -64,9 +66,8 @@ class VideoDecoder(
             // 独自キーを嫌う機種向けに、最小の設定でもう一度
             Log.w(TAG, "configure failed, retry plain", e)
             c.reset()
-            val plain = MediaFormat.createVideoFormat(MIME, width, height)
-            plain.setByteBuffer("csd-0", ByteBuffer.wrap(START + sps))
-            plain.setByteBuffer("csd-1", ByteBuffer.wrap(START + pps))
+            val plain = MediaFormat.createVideoFormat(mime, width, height)
+            setCsd(plain)
             plain.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, maxOf(width * height, 512 * 1024))
             c.configure(plain, surface, null, 0)
         }
@@ -77,6 +78,16 @@ class VideoDecoder(
         outThread = Thread({ drainLoop() }, "decoder-out").also {
             it.priority = Thread.MAX_PRIORITY
             it.start()
+        }
+    }
+
+    /** H.264 は csd-0 = SPS・csd-1 = PPS、H.265 は csd-0 に VPS・SPS・PPS をまとめて入れる */
+    private fun setCsd(f: MediaFormat) {
+        if (mime == HEVC) {
+            f.setByteBuffer("csd-0", ByteBuffer.wrap(START + (vps ?: ByteArray(0)) + START + sps + START + pps))
+        } else {
+            f.setByteBuffer("csd-0", ByteBuffer.wrap(START + sps))
+            f.setByteBuffer("csd-1", ByteBuffer.wrap(START + pps))
         }
     }
 
@@ -138,14 +149,13 @@ class VideoDecoder(
     companion object {
         private const val TAG = "VideoDecoder"
         const val MIME = "video/avc"
+        const val HEVC = "video/hevc"
         private val START = byteArrayOf(0, 0, 0, 1)
 
         /** ハードウェアのデコーダーを優先して選ぶ */
-        private fun pickDecoderName(): String? = bestDecoder()?.name
-
-        private fun bestDecoder(): MediaCodecInfo? {
+        private fun bestDecoder(mime: String = MIME): MediaCodecInfo? {
             val list = MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos
-                .filter { !it.isEncoder && it.supportedTypes.any { t -> t.equals(MIME, true) } }
+                .filter { !it.isEncoder && it.supportedTypes.any { t -> t.equals(mime, true) } }
             fun soft(n: String) = n.startsWith("OMX.google.") || n.startsWith("c2.android.") ||
                 n.contains("ffmpeg", true) || n.contains(".sw.", true)
             return list.firstOrNull { !soft(it.name) } ?: list.firstOrNull()
@@ -171,6 +181,15 @@ class VideoDecoder(
             }
             return Pair(maxOf(cw, 320), maxOf(ch, 240))
         }
+
+        /** H.265 をハードウェアで、この大きさで再生できるか（ソフトウェアだけなら遅いので使わない） */
+        fun canHevc(w: Int, h: Int): Boolean = try {
+            val d = bestDecoder(HEVC)
+            val soft = d == null || d.name.startsWith("OMX.google.") || d.name.startsWith("c2.android.")
+            !soft && d!!.getCapabilitiesForType(HEVC).videoCapabilities.let {
+                it.isSizeSupported(w, h) || it.isSizeSupported(h, w)
+            }
+        } catch (_: Exception) { false }
 
         fun nowUs(): Long = SystemClock.elapsedRealtimeNanos() / 1000
     }

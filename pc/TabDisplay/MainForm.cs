@@ -30,6 +30,13 @@ public sealed class MainForm : Form
     private CheckBox _dpiBox = null!, _adaptiveBox = null!, _skipBox = null!;
     private TextBox _appsBox = null!;
     private const int HotkeyId = 1;
+    private const int WM_CLIPBOARDUPDATE = 0x031D;
+    private string? _clipLast;
+    private EventWaitHandle? _sendEvent;
+    private Updater.Release? _pendingUpdate;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool AddClipboardFormatListener(IntPtr hwnd);
 
     public MainForm(AppSettings settings, bool startHidden)
     {
@@ -65,6 +72,58 @@ public sealed class MainForm : Form
         });
         if (!_server.Start()) _status.Text = string.Format(L.T("port_busy"), _s.Port);
         else _status.Text = L.T("st_idle");
+
+        // クリップボード：タブレットでコピーした文字を PC に
+        _server.ClipReceived += text => Ui(() =>
+        {
+            _clipLast = text;
+            try { Clipboard.SetText(text); } catch { }
+        });
+        // タブレットからファイルが届いた
+        _server.FileReceived += path => Ui(() =>
+        {
+            _tray.ShowBalloonTip(3000, "TabDisplay", string.Format(L.T("file_received"), Path.GetFileName(path)), ToolTipIcon.Info);
+            _status.Text = string.Format(L.T("file_received"), path);
+        });
+        _tray.BalloonTipClicked += (_, _) =>
+        {
+            try { Process.Start(new ProcessStartInfo(FileTransfer.ReceiveDir) { UseShellExecute = true }); } catch { }
+        };
+        // この窓にファイルをドロップ → タブレットへ
+        AllowDrop = true;
+        DragEnter += (_, e) => { if (e.Data?.GetDataPresent(DataFormats.FileDrop) == true) e.Effect = DragDropEffects.Copy; };
+        DragDrop += (_, e) =>
+        {
+            if (e.Data?.GetData(DataFormats.FileDrop) is string[] files) SendFiles(files);
+        };
+        // 「送る」→「TabDisplay」から
+        _sendEvent = new EventWaitHandle(false, EventResetMode.AutoReset, Program.SendEventName);
+        new Thread(() =>
+        {
+            while (true)
+            {
+                _sendEvent.WaitOne();
+                Ui(SendQueued);
+            }
+        }) { IsBackground = true }.Start();
+        // PC のロック解除・スリープ明け：撮り直し、USB のタブレットにもつなぎ直す
+        Microsoft.Win32.SystemEvents.SessionSwitch += (_, e) =>
+        {
+            if (e.Reason == Microsoft.Win32.SessionSwitchReason.SessionUnlock)
+                Task.Delay(1500).ContinueWith(_ => _server.ApplySettings());
+        };
+        Microsoft.Win32.SystemEvents.PowerModeChanged += (_, e) =>
+        {
+            if (e.Mode != Microsoft.Win32.PowerModes.Resume) return;
+            Task.Delay(4000).ContinueWith(_ =>
+            {
+                _server.ApplySettings();
+                lock (_autoSerials) _autoSerials.Clear();
+                Ui(() => ConnectUsb(true));
+            });
+        };
+        Shown += (_, _) => AfterShown();
+        if (_startHidden) Task.Delay(3000).ContinueWith(_ => Ui(AfterShown));
 
         _usbTimer.Tick += (_, _) => AutoUsbTick();
         _usbTimer.Start();
@@ -256,6 +315,13 @@ public sealed class MainForm : Form
         skip.CheckedChanged += (_, _) => { _s.SkipStatic = skip.Checked; _s.Save(); _server.ApplySettings(); };
         Row(skip);
 
+        var hevc = new CheckBox { Text = L.T("chk_hevc"), AutoSize = true, Checked = _s.UseHevc };
+        hevc.CheckedChanged += (_, _) => { _s.UseHevc = hevc.Checked; _s.Save(); _server.ApplySettings(); };
+        Row(hevc);
+        var clip = new CheckBox { Text = L.T("chk_clip"), AutoSize = true, Checked = _s.ShareClipboard };
+        clip.CheckedChanged += (_, _) => { _s.ShareClipboard = clip.Checked; _s.Save(); };
+        Row(clip);
+
         var autoUsb = new CheckBox { Text = L.T("chk_autousb"), AutoSize = true, Checked = _s.AutoConnectUsb };
         autoUsb.CheckedChanged += (_, _) => { _s.AutoConnectUsb = autoUsb.Checked; _s.Save(); };
         Row(autoUsb);
@@ -309,10 +375,41 @@ public sealed class MainForm : Form
         profRow.Controls.AddRange(new Control[] { prof, saveProf, delProf });
         Row(Lbl("lbl_profile"), profRow);
 
+        Row(new Label { Text = L.T("drop_hint"), AutoSize = true, ForeColor = Color.DimGray, MaximumSize = new Size(540, 0) });
         Row(new Label { Text = L.T("hotkey_help"), AutoSize = true, ForeColor = Color.DimGray, MaximumSize = new Size(540, 0) });
 
         Row(_driver);
         var tools = new FlowLayoutPanel { AutoSize = true, WrapContents = true, MaximumSize = new Size(540, 0) };
+        tools.Controls.Add(Btn("btn_send_files", () =>
+        {
+            using var d = new OpenFileDialog { Multiselect = true };
+            if (d.ShowDialog(this) == DialogResult.OK) SendFiles(d.FileNames);
+        }));
+        tools.Controls.Add(Btn("btn_wizard", ShowWizard));
+        tools.Controls.Add(Btn("btn_diag", () =>
+        {
+            Cursor = Cursors.WaitCursor;
+            var report = Diagnostics.Run(_s, _server);
+            Cursor = Cursors.Default;
+            using var f = new Form { Text = L.T("btn_diag"), Width = 720, Height = 520, StartPosition = FormStartPosition.CenterParent };
+            f.Controls.Add(new TextBox { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Both, Dock = DockStyle.Fill,
+                Text = report.Replace("\n", Environment.NewLine), Font = new Font(FontFamily.GenericMonospace, 10) });
+            f.ShowDialog(this);
+        }));
+        tools.Controls.Add(Btn("btn_logs", () =>
+        {
+            Task.Run(() =>
+            {
+                try
+                {
+                    var path = LogBundle.Create(_s, _server);
+                    Ui(() => _status.Text = string.Format(L.T("logs_done"), Path.GetFileName(path)));
+                    Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = true });
+                }
+                catch (Exception e) { Log.Write("log bundle: " + e.Message); }
+            });
+        }));
+        tools.Controls.Add(Btn("btn_update", () => CheckUpdate(quiet: false)));
         tools.Controls.Add(Btn("btn_install_app", () => InstallApp()));
         tools.Controls.Add(Btn("btn_install_driver", InstallDriver));
         tools.Controls.Add(Btn("btn_uninstall_driver", UninstallDriver));
@@ -326,6 +423,84 @@ public sealed class MainForm : Form
         var notesTitle = new Label { Text = L.T("notes_title"), AutoSize = true, Font = new Font(Font, FontStyle.Bold), Margin = new Padding(3, 12, 3, 3) };
         Row(notesTitle);
         Row(new Label { Text = L.T("notes"), AutoSize = true, MaximumSize = new Size(540, 0), ForeColor = Color.DimGray });
+    }
+
+    private bool _afterShownDone;
+
+    /// <summary>起動のあと 1 回だけ：はじめの設定・書き置きのファイル・テザリングの案内・更新の確認</summary>
+    private void AfterShown()
+    {
+        if (_afterShownDone) return;
+        _afterShownDone = true;
+        if (!_s.WizardDone && Visible)
+        {
+            _s.WizardDone = true;
+            _s.Save();
+            ShowWizard();
+        }
+        SendQueued();
+        if (Diagnostics.TetherAdapter() is string t) _status.Text = string.Format(L.T("st_tether"), t);
+        if ((DateTime.Now - _s.LastUpdateCheck).TotalHours > 20) CheckUpdate(quiet: true);
+    }
+
+    private void ShowWizard()
+    {
+        using var w = new SetupWizard(InstallDriver, InstallApp, () => ConnectUsb(false),
+            () => new QrForm(_s).ShowDialog(this));
+        w.ShowDialog(this);
+    }
+
+    private void SendFiles(IEnumerable<string> files)
+    {
+        var list = files.Where(File.Exists).ToList();
+        if (list.Count == 0) return;
+        if (_server.SendFiles(list)) _status.Text = string.Format(L.T("files_sent"), list.Count);
+        else _status.Text = L.T("files_no_tablet");
+    }
+
+    private void SendQueued()
+    {
+        try
+        {
+            if (!File.Exists(Program.SendQueueFile)) return;
+            var files = File.ReadAllLines(Program.SendQueueFile).Where(l => l.Trim().Length > 0).ToList();
+            File.Delete(Program.SendQueueFile);
+            if (files.Count > 0) SendFiles(files);
+        }
+        catch (Exception e) { Log.Write("send queue: " + e.Message); }
+    }
+
+    private void CheckUpdate(bool quiet)
+    {
+        Task.Run(async () =>
+        {
+            var r = await Updater.CheckAsync();
+            _s.LastUpdateCheck = DateTime.Now;
+            _s.Save();
+            Ui(() =>
+            {
+                if (r == null) { if (!quiet) _status.Text = L.T("upd_fail"); return; }
+                if (r.Build <= Updater.CurrentBuild || Updater.CurrentBuild == 0 && quiet)
+                {
+                    if (!quiet) _status.Text = string.Format(L.T("upd_none"), Updater.CurrentLabel);
+                    return;
+                }
+                _pendingUpdate = r;
+                if (quiet)
+                {
+                    _tray.ShowBalloonTip(5000, "TabDisplay", string.Format(L.T("upd_tray"), r.Tag), ToolTipIcon.Info);
+                    _status.Text = string.Format(L.T("upd_tray"), r.Tag);
+                    return;
+                }
+                if (MessageBox.Show(this, string.Format(L.T("upd_new"), r.Tag), Text, MessageBoxButtons.YesNo) != DialogResult.Yes) return;
+                _status.Text = L.T("upd_running");
+                Task.Run(async () =>
+                {
+                    if (await Updater.InstallAsync(r)) Ui(ExitApp);
+                    else Ui(() => _status.Text = L.T("upd_fail"));
+                });
+            });
+        });
     }
 
     private void SaveApps()
@@ -367,10 +542,28 @@ public sealed class MainForm : Form
         base.OnHandleCreated(e);
         if (!Win.RegisterHotKey(Handle, HotkeyId, Win.MOD_CONTROL | Win.MOD_ALT | Win.MOD_NOREPEAT, (uint)Keys.T))
             Log.Write("hotkey Ctrl+Alt+T is in use");
+        AddClipboardFormatListener(Handle);
     }
 
     protected override void WndProc(ref Message m)
     {
+        if (m.Msg == WM_CLIPBOARDUPDATE)
+        {
+            // PC でコピーした文字をタブレットへ（タブレットから来たものは送り返さない）
+            try
+            {
+                if (_s.ShareClipboard && _server.Connected && Clipboard.ContainsText())
+                {
+                    var t = Clipboard.GetText();
+                    if (t != _clipLast)
+                    {
+                        _clipLast = t;
+                        _server.BroadcastClip(t);
+                    }
+                }
+            }
+            catch { }
+        }
         if (m.Msg == Win.WM_HOTKEY && m.WParam.ToInt32() == HotkeyId)
         {
             try { Win.MoveForegroundToNext(); } catch (Exception ex) { Log.Write("move window: " + ex.Message); }
@@ -508,6 +701,11 @@ public sealed class MainForm : Form
         m.Items.Add(new ToolStripSeparator());
         m.Items.Add(L.T("btn_connect_usb"), null, (_, _) => ConnectUsb(false));
         m.Items.Add(L.T("btn_wifi"), null, (_, _) => { ShowFromTray(); new QrForm(_s).ShowDialog(this); });
+        m.Items.Add(L.T("btn_send_files"), null, (_, _) =>
+        {
+            using var d = new OpenFileDialog { Multiselect = true };
+            if (d.ShowDialog() == DialogResult.OK) SendFiles(d.FileNames);
+        });
         var disconnect = new ToolStripMenuItem(L.T("btn_disconnect"), null, (_, _) => _server.Disconnect());
         m.Items.Add(disconnect);
         m.Items.Add(new ToolStripSeparator());

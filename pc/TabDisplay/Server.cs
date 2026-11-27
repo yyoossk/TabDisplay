@@ -32,8 +32,32 @@ public sealed class Server : IDisposable
     public event Action<string>? Status;
     public event Action<string>? Stats;
     public event Action<bool>? ConnectedChanged;
+    /// <summary>タブレットでコピーされた文字</summary>
+    public event Action<string>? ClipReceived;
+    /// <summary>タブレットから届いたファイル（保存した場所）</summary>
+    public event Action<string>? FileReceived;
+
+    internal void RaiseClip(string s) => ClipReceived?.Invoke(s);
+    internal void RaiseFile(string path) => FileReceived?.Invoke(path);
+
+    /// <summary>PC でコピーした文字を、つないでいる全部のタブレットへ</summary>
+    public void BroadcastClip(string text)
+    {
+        foreach (var s in Snapshot()) s.SendClip(text);
+    }
+
+    /// <summary>ファイルを全部のタブレットへ送る。送り先がなければ false</summary>
+    public bool SendFiles(IEnumerable<string> paths)
+    {
+        var list = Snapshot();
+        if (list.Count == 0) return false;
+        var files = paths.Where(File.Exists).ToList();
+        foreach (var s in list) s.SendFiles(files);
+        return files.Count > 0;
+    }
 
     public bool Connected { get { lock (_lock) return _sessions.Count > 0; } }
+    public bool Listening => _listener != null;
     internal AppSettings Settings => _settings;
 
     public Server(AppSettings settings) => _settings = settings;
@@ -466,6 +490,8 @@ internal sealed class Session
     public bool Closed => _closed;
     /// <summary>入力専用（映像なし・ペンタブレットとして使う）</summary>
     public volatile bool InputOnly;
+    /// <summary>タブレットが H.265 を再生できる</summary>
+    public bool CanHevc;
     /// <summary>つないだら開くソフトをもう開いたか</summary>
     public bool AppsLaunched;
     // 画質の方針（自動のとき）
@@ -501,6 +527,7 @@ internal sealed class Session
         TabH = Server.Even((int?)hello["h"] ?? 1080);
         Dpi = (int?)hello["dpi"] ?? 160;
         InputOnly = (bool?)hello["inputOnly"] ?? false;
+        CanHevc = (bool?)hello["hevc"] ?? false;
         CurrentMbps = _settings.BitrateMbps;
         _lastRateChange = Environment.TickCount64;
         Log.Write($"tablet {TabletName} {TabW}x{TabH} dpi {Dpi} from {client.Client.RemoteEndPoint}");
@@ -576,10 +603,71 @@ internal sealed class Session
                     }
                     break;
                 }
+                case Protocol.T_CLIP:
+                {
+                    var j = Protocol.Json(data);
+                    var text = (string?)j["s"];
+                    if (text != null && _settings.ShareClipboard) _server.RaiseClip(text);
+                    break;
+                }
+                case Protocol.T_FILE_BEGIN:
+                {
+                    var j = Protocol.Json(data);
+                    var id = (int?)j["id"] ?? 0;
+                    try
+                    {
+                        _incoming[id] = new FileTransfer.Incoming((string?)j["name"] ?? "file");
+                    }
+                    catch (Exception e) { Log.Write("file begin: " + e.Message); }
+                    break;
+                }
+                case Protocol.T_FILE_DATA:
+                {
+                    if (data.Length < 4) break;
+                    var id = System.Buffers.Binary.BinaryPrimitives.ReadInt32BigEndian(data);
+                    if (_incoming.TryGetValue(id, out var f)) f.Write(data, 4);
+                    break;
+                }
+                case Protocol.T_FILE_END:
+                {
+                    var j = Protocol.Json(data);
+                    var id = (int?)j["id"] ?? 0;
+                    if (_incoming.Remove(id, out var f))
+                    {
+                        f.Dispose();
+                        _server.RaiseFile(f.Path);
+                    }
+                    break;
+                }
                 case Protocol.T_BYE:
                     return;
             }
         }
+    }
+
+    // ---------- クリップボード・ファイル ----------
+
+    private readonly Dictionary<int, FileTransfer.Incoming> _incoming = new();
+    private int _nextFileId = 1;
+    private int _captureRetries;
+
+    public void SendClip(string text)
+    {
+        if (!_settings.ShareClipboard || text.Length > 512 * 1024) return;
+        Send(Protocol.Pack(Protocol.P_CLIP, new JsonObject { ["s"] = text }));
+    }
+
+    public void SendFiles(List<string> paths)
+    {
+        new Thread(() =>
+        {
+            foreach (var p in paths)
+            {
+                if (_closed) return;
+                try { FileTransfer.Send(p, Interlocked.Increment(ref _nextFileId), Send, () => _closed); }
+                catch (Exception e) { Log.Write($"send file {p}: {e.Message}"); }
+            }
+        }) { IsBackground = true, Name = "send-file" }.Start();
     }
 
     /// <summary>入力専用：映像は送らず、タブレットの面を PC の画面 target に当てる</summary>
@@ -621,9 +709,9 @@ internal sealed class Session
             SendStatus("ok");
             var spec = new CaptureSpec(target.DeviceName, target.Width, target.Height, outW, outH,
                 _settings.Fps, Math.Clamp(CurrentMbps, 1, _settings.BitrateMbps), _settings.SkipStatic,
-                offX, offY, region, TextQualityNow);
+                offX, offY, region, TextQualityNow, _settings.UseHevc && CanHevc);
             var cap = new Capture(spec, _settings);
-            cap.Config += (w, h, sps, pps) =>
+            cap.Config += (w, h, codec, vps, sps, pps) =>
             {
                 // 新しい絵の設定が来たら、古いほうの絵はもう送らない
                 if (!ReferenceEquals(_capture, cap))
@@ -638,6 +726,8 @@ internal sealed class Session
                     ["w"] = w,
                     ["h"] = h,
                     ["fps"] = _settings.Fps,
+                    ["codec"] = codec,
+                    ["vps"] = vps != null ? Convert.ToBase64String(vps) : null,
                     ["sps"] = Convert.ToBase64String(sps),
                     ["pps"] = Convert.ToBase64String(pps),
                 }));
@@ -652,10 +742,14 @@ internal sealed class Session
                 if (_closed || !ReferenceEquals(_capture, cap)) return;
                 Log.Write("capture failed: " + reason);
                 _server.RaiseStatus("st_capture_failed");
+                // 画面のロック・スリープ明け・解像度の変更などで撮れなくなったら、少し待って撮り直す
+                var wait = Math.Min(10000, 2000 * (1 << Math.Min(3, _captureRetries++)));
+                Task.Delay(wait).ContinueWith(_ => { if (!_closed) _server.RequestLayout(this); });
             };
             if (old == null) _capture = cap;
             if (cap.Start())
             {
+                _captureRetries = 0;
                 _server.RaiseStatus("st_streaming", TabletName, outW, outH, cap.EncoderName ?? "");
                 if (!ReferenceEquals(_capture, cap))
                 {
@@ -818,5 +912,6 @@ internal sealed class Session
         _queue.CompleteAdding();
         try { _stream.Dispose(); } catch { }
         try { _client.Close(); } catch { }
+        foreach (var f in _incoming.Values) try { f.Dispose(); } catch { }
     }
 }

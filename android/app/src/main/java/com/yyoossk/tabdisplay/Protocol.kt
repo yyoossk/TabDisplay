@@ -26,6 +26,10 @@ object Protocol {
     const val T_STATS = 6      // JSON: fps, lat（PC の画面に出すため）
     const val T_BYE = 7
     const val T_OPTS = 8       // JSON: inputOnly（映像なしの入力専用＝ペンタブレット）
+    const val T_CLIP = 9       // JSON: s（タブレットでコピーした文字）
+    const val T_FILE_BEGIN = 30 // JSON: id, name, size
+    const val T_FILE_DATA = 31  // [id 4 バイト][中身]
+    const val T_FILE_END = 32   // JSON: id
 
     // PC → タブレット
     const val P_CONFIG = 10    // JSON: w, h, fps, sps, pps（base64）, name
@@ -36,6 +40,10 @@ object Protocol {
     const val P_AUDIO_CFG = 15 // JSON: rate, ch
     const val P_AUDIO = 16     // PCM 16bit（リトルエンディアン、交互）
     const val P_AREA = 17      // JSON: w, h（入力専用のとき、当てる PC の画面の大きさ）
+    const val P_CLIP = 18      // JSON: s（PC でコピーした文字）
+    const val P_FILE_BEGIN = 40
+    const val P_FILE_DATA = 41
+    const val P_FILE_END = 42
 
     /** PC が Wi-Fi に出す「ここにいます」の知らせ（UDP ブロードキャスト） */
     const val DISCOVERY_PORT = 38501

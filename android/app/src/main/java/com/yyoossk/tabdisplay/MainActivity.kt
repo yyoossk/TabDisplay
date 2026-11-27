@@ -1,6 +1,8 @@
 package com.yyoossk.tabdisplay
 
 import android.app.Activity
+import android.app.AlertDialog
+import android.provider.Settings
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -42,6 +44,13 @@ class MainActivity : Activity() {
         prefs = Prefs(this)
         buildUi()
         handleIntent(intent)
+        // 初めて開いたときは、準備のしかたを案内する
+        val sp = getSharedPreferences("tabdisplay", MODE_PRIVATE)
+        if (!sp.getBoolean("guided", false)) {
+            sp.edit().putBoolean("guided", true).apply()
+            showGuide()
+        }
+        AppUpdate.check(this, quiet = true)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -83,6 +92,18 @@ class MainActivity : Activity() {
         col.addView(title(R.string.usb_title))
         col.addView(body(getString(R.string.usb_body)))
 
+        col.addView(Button(this).apply {
+            setText(R.string.guide_open)
+            setOnClickListener { showGuide() }
+        })
+
+        col.addView(title(R.string.tether_title))
+        col.addView(body(getString(R.string.tether_body)))
+        col.addView(Button(this).apply {
+            setText(R.string.tether_open)
+            setOnClickListener { openTetherSettings() }
+        })
+
         col.addView(title(R.string.wifi_title))
         col.addView(body(getString(R.string.wifi_body)))
         col.addView(Button(this).apply {
@@ -120,6 +141,16 @@ class MainActivity : Activity() {
             setOnCheckedChangeListener { _, b -> prefs.audio = b }
         })
         col.addView(CheckBox(this).apply {
+            setText(R.string.opt_clip)
+            isChecked = prefs.clipboard
+            setOnCheckedChangeListener { _, b -> prefs.clipboard = b }
+        })
+        col.addView(CheckBox(this).apply {
+            setText(R.string.opt_split)
+            isChecked = prefs.split
+            setOnCheckedChangeListener { _, b -> prefs.split = b }
+        })
+        col.addView(CheckBox(this).apply {
             setText(R.string.opt_dim)
             isChecked = prefs.dim
             setOnCheckedChangeListener { _, b -> prefs.dim = b }
@@ -146,6 +177,17 @@ class MainActivity : Activity() {
         shortcutBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         col.addView(shortcutBox)
         refreshShortcuts()
+
+        val tools = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        tools.addView(Button(this).apply {
+            setText(R.string.upd_check)
+            setOnClickListener { AppUpdate.check(this@MainActivity, quiet = false) }
+        })
+        tools.addView(Button(this).apply {
+            setText(R.string.log_share)
+            setOnClickListener { shareLog() }
+        })
+        col.addView(tools)
 
         col.addView(title(R.string.notes_title))
         col.addView(body(getString(R.string.notes)).apply { alpha = 0.75f })
@@ -215,6 +257,47 @@ class MainActivity : Activity() {
             })
             shortcutBox.addView(row)
         }
+    }
+
+    /** はじめの案内：USB デバッグのオンのしかた・Wi-Fi・USB テザリング */
+    private fun showGuide() {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.guide_title)
+            .setMessage(R.string.guide_body)
+            .setPositiveButton(R.string.guide_dev) { _, _ ->
+                try { startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)) }
+                catch (_: Exception) { startActivity(Intent(Settings.ACTION_DEVICE_INFO_SETTINGS)) }
+            }
+            .setNeutralButton(R.string.guide_about) { _, _ -> startActivity(Intent(Settings.ACTION_DEVICE_INFO_SETTINGS)) }
+            .setNegativeButton(R.string.guide_close, null)
+            .show()
+    }
+
+    private fun openTetherSettings() {
+        val i = Intent().setClassName("com.android.settings", "com.android.settings.TetherSettings")
+        try { startActivity(i) } catch (_: Exception) {
+            try { startActivity(Intent(Settings.ACTION_WIRELESS_SETTINGS)) } catch (_: Exception) {}
+        }
+    }
+
+    /** 不具合の報告用に、このアプリのログを共有する（メール・メッセージなどに貼れる） */
+    private fun shareLog() {
+        Thread {
+            val text = try {
+                val p = Runtime.getRuntime().exec(arrayOf("logcat", "-d", "-v", "time", "-t", "3000"))
+                p.inputStream.bufferedReader().readText()
+            } catch (e: Exception) { e.toString() }
+            val head = "TabDisplay build ${AppUpdate.currentBuild(this)} / Android ${android.os.Build.VERSION.RELEASE} / " +
+                "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}\n\n"
+            val body = head + text.takeLast(200_000)
+            runOnUiThread {
+                startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_SUBJECT, "TabDisplay log")
+                    putExtra(Intent.EXTRA_TEXT, body)
+                }, getString(R.string.log_share)))
+            }
+        }.start()
     }
 
     private fun scan() {

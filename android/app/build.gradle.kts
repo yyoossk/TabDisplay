@@ -11,10 +11,14 @@ android {
         applicationId = "com.yyoossk.tabdisplay"
         minSdk = 23          // Android 6
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        // ビルド番号（GitHub Actions の実行番号）。PC ソフトと同じ番号になり、新しいか比べるのに使う
+        val build = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
+        versionCode = build
+        versionName = "1.0.$build"
     }
 
+    // 署名：毎回同じ鍵で署名しないと、アプリの更新（上書き）ができない。
+    // GitHub の Secrets に鍵があればそれを、なければリポジトリの tabdisplay.jks を使う
     signingConfigs {
         create("release") {
             val f = System.getenv("SIGNING_STORE_FILE")
@@ -23,6 +27,11 @@ android {
                 storePassword = System.getenv("SIGNING_STORE_PASSWORD")
                 keyAlias = System.getenv("SIGNING_KEY_ALIAS")
                 keyPassword = System.getenv("SIGNING_KEY_PASSWORD")
+            } else {
+                storeFile = file("tabdisplay.jks")
+                storePassword = "tabdisplay"
+                keyAlias = "tabdisplay"
+                keyPassword = "tabdisplay"
             }
         }
     }
@@ -30,9 +39,10 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
-            val f = System.getenv("SIGNING_STORE_FILE")
-            signingConfig = if (f != null && f.isNotEmpty()) signingConfigs.getByName("release")
-                            else signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
+        }
+        debug {
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 

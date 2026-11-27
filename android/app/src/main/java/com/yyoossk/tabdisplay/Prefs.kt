@@ -130,6 +130,20 @@ class Prefs(ctx: Context) {
         get() = sp.getBoolean("strip", false)
         set(v) = sp.edit().putBoolean("strip", v).apply()
 
+    /** クリップボード（コピーした文字）を PC と共有する */
+    var clipboard: Boolean
+        get() = sp.getBoolean("clip", true)
+        set(v) = sp.edit().putBoolean("clip", v).apply()
+
+    /** 画面を分ける：上＝PC の画面、下＝ボタンとメモ */
+    var split: Boolean
+        get() = sp.getBoolean("split", false)
+        set(v) = sp.edit().putBoolean("split", v).apply()
+
+    var memo: String
+        get() = sp.getString("memo", "") ?: ""
+        set(v) = sp.edit().putString("memo", v).apply()
+
     /** タッチパッドモード */
     var touchpad: Boolean
         get() = sp.getBoolean("touchpad", false)

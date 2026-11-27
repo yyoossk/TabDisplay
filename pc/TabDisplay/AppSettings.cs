@@ -97,6 +97,16 @@ public class AppSettings
     public List<string> LaunchApps { get; set; } = new();
     /// <summary>名前をつけて保存した設定の組み合わせ</summary>
     public List<Profile> Profiles { get; set; } = new();
+    /// <summary>はじめの設定の案内をもう見た</summary>
+    public bool WizardDone { get; set; } = false;
+    /// <summary>最後に更新を確かめた日時</summary>
+    public DateTime LastUpdateCheck { get; set; } = DateTime.MinValue;
+    /// <summary>クリップボード（コピーした文字）をタブレットと共有する</summary>
+    public bool ShareClipboard { get; set; } = true;
+    /// <summary>H.265 で送る（グラボとタブレットが対応しているとき）</summary>
+    public bool UseHevc { get; set; } = true;
+    /// <summary>うまく動いた H.265 の圧縮方式</summary>
+    public string LastEncoderHevc { get; set; } = "";
     /// <summary>うまく動いた圧縮方式（次回はこれから試す）</summary>
     public string LastEncoder { get; set; } = "";
     /// <summary>Wi-Fi 接続の合言葉（QR に入れる）</summary>

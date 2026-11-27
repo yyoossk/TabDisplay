@@ -31,7 +31,7 @@ class Connection(
         fun dpi(): Int
         fun onConnecting(host: String)
         fun onConnected(host: String)
-        fun onConfig(w: Int, h: Int, fps: Int, sps: ByteArray, pps: ByteArray)
+        fun onConfig(w: Int, h: Int, fps: Int, codec: String, vps: ByteArray?, sps: ByteArray, pps: ByteArray)
         fun onVideo(data: ByteArray, offset: Int, length: Int, pcTimeUs: Long, flags: Int)
         fun onStatus(s: String)
         fun onError(e: String)
@@ -41,6 +41,10 @@ class Connection(
         fun deviceId(): String
         fun inputOnly(): Boolean
         fun onArea(w: Int, h: Int)
+        fun onClip(text: String)
+        fun onFileBegin(id: Int, name: String, size: Long)
+        fun onFileData(id: Int, data: ByteArray)
+        fun onFileEnd(id: Int)
     }
 
     @Volatile private var closed = false
@@ -162,8 +166,11 @@ class Connection(
                 }
                 Protocol.P_CONFIG -> {
                     val j = JSONObject(String(m.data, Charsets.UTF_8))
+                    val vps = j.optString("vps", "")
                     listener.onConfig(
                         j.getInt("w"), j.getInt("h"), j.optInt("fps", 60),
+                        j.optString("codec", "h264"),
+                        if (vps.isNotEmpty() && vps != "null") Base64.decode(vps, Base64.NO_WRAP) else null,
                         Base64.decode(j.getString("sps"), Base64.NO_WRAP),
                         Base64.decode(j.getString("pps"), Base64.NO_WRAP),
                     )
@@ -190,6 +197,17 @@ class Connection(
                     listener.onAudioConfig(j.optInt("rate", 48000), j.optInt("ch", 2))
                 }
                 Protocol.P_AUDIO -> listener.onAudio(m.data)
+                Protocol.P_CLIP -> listener.onClip(JSONObject(String(m.data, Charsets.UTF_8)).optString("s"))
+                Protocol.P_FILE_BEGIN -> {
+                    val j = JSONObject(String(m.data, Charsets.UTF_8))
+                    listener.onFileBegin(j.optInt("id"), j.optString("name", "file"), j.optLong("size"))
+                }
+                Protocol.P_FILE_DATA -> if (m.data.size >= 4) {
+                    val id = ((m.data[0].toInt() and 0xff) shl 24) or ((m.data[1].toInt() and 0xff) shl 16) or
+                        ((m.data[2].toInt() and 0xff) shl 8) or (m.data[3].toInt() and 0xff)
+                    listener.onFileData(id, m.data)
+                }
+                Protocol.P_FILE_END -> listener.onFileEnd(JSONObject(String(m.data, Charsets.UTF_8)).optInt("id"))
                 Protocol.P_AREA -> {
                     val j = JSONObject(String(m.data, Charsets.UTF_8))
                     listener.onArea(j.optInt("w", 16), j.optInt("h", 9))
@@ -212,6 +230,7 @@ class Connection(
         j.put("token", target.token)
         j.put("id", listener.deviceId())
         j.put("inputOnly", listener.inputOnly())
+        j.put("hevc", VideoDecoder.canHevc(w, h))
         j.put("name", (Build.MANUFACTURER + " " + Build.MODEL).trim())
         j.put("w", w)
         j.put("h", h)
