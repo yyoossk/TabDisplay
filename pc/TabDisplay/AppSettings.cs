@@ -97,6 +97,12 @@ public class AppSettings
     public List<string> LaunchApps { get; set; } = new();
     /// <summary>名前をつけて保存した設定の組み合わせ</summary>
     public List<Profile> Profiles { get; set; } = new();
+    /// <summary>ショートカットキー（動作の名前 → 「Ctrl+Alt+T」など。空はなし）</summary>
+    public Dictionary<string, string> Hotkeys { get; set; } = new();
+    /// <summary>PC の通知をタブレットに出す</summary>
+    public bool ForwardNotifications { get; set; } = false;
+    /// <summary>「PC のみ」に切り替える前の表示のしかた（キーで戻すため）</summary>
+    public ShowMode ModeBeforePcOnly { get; set; } = ShowMode.Extend;
     /// <summary>はじめの設定の案内をもう見た</summary>
     public bool WizardDone { get; set; } = false;
     /// <summary>最後に更新を確かめた日時</summary>

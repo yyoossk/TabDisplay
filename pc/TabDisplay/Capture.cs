@@ -23,7 +23,8 @@ public record CaptureSpec(
     int OffsetY = 0,
     bool Region = false,
     bool TextQuality = false, // 文字をくっきり（動きは少しにじんでもよい）
-    bool Hevc = false);       // H.265 で送る（相手が再生できるときだけ）
+    bool Hevc = false,        // H.265 で送る（相手が再生できるときだけ）
+    double Contrast = 1.0);   // コントラスト（1.0 = そのまま。変えるときは CPU で処理する）
 
 /// <summary>
 /// ffmpeg で画面を撮って H.264 にする。
@@ -148,7 +149,8 @@ public sealed class Capture : IDisposable
             return false;
         }
         var (adapter, output) = dx.Value;
-        var scale = Spec.OutWidth != Spec.SourceWidth || Spec.OutHeight != Spec.SourceHeight;
+        var scale = Spec.OutWidth != Spec.SourceWidth || Spec.OutHeight != Spec.SourceHeight
+                    || Math.Abs(Spec.Contrast - 1.0) > 0.01;
 
         // dup_frames=0：画面が変わらないときは絵を出さない（送る量・タブレットの電池を節約）
         var filter = new StringBuilder($"ddagrab=output_idx={output}:framerate={Spec.Fps}:draw_mouse=1:dup_frames={(Spec.SkipStatic ? 0 : 1)}");
@@ -156,7 +158,11 @@ public sealed class Capture : IDisposable
         if (Spec.Region)
             filter.Append($":offset_x={Spec.OffsetX}:offset_y={Spec.OffsetY}:video_size={Spec.SourceWidth}x{Spec.SourceHeight}");
         if (scale)
-            filter.Append($",hwdownload,format=bgra,scale={Spec.OutWidth}:{Spec.OutHeight}:flags=fast_bilinear,format=nv12");
+            filter.Append($",hwdownload,format=bgra,scale={Spec.OutWidth}:{Spec.OutHeight}:flags=fast_bilinear" +
+                          (Math.Abs(Spec.Contrast - 1.0) > 0.01
+                              ? $",eq=contrast={Spec.Contrast.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)}"
+                              : "") +
+                          ",format=nv12");
         else if (!enc.GpuFrames)
             filter.Append(enc.Name.StartsWith("qsv")
                 ? ",hwmap=derive_device=qsv,format=qsv"

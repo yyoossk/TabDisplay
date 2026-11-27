@@ -105,7 +105,7 @@ public static class DriverSetup
             // 5. Wi-Fi 接続を受けられるようにファイアウォールを開ける
             Run("netsh.exe", $"advfirewall firewall delete rule name=\"{FirewallRule}\"", null);
             Run("netsh.exe", $"advfirewall firewall add rule name=\"{FirewallRule}\" dir=in action=allow protocol=TCP " +
-                             $"localport={AppSettings.Load().Port} program=\"{Environment.ProcessPath}\" enable=yes profile=any", null);
+                             $"localport={AppSettings.Load().Port},{WebServer.Port} program=\"{Environment.ProcessPath}\" enable=yes profile=any", null);
 
             // 6. タブレットをつなぐまでは画面を増やさない
             Thread.Sleep(2000);

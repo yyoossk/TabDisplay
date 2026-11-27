@@ -46,7 +46,7 @@ public sealed class QrForm : Form
         using var ms = new MemoryStream(png);
         var pic = new PictureBox
         {
-            Image = Image.FromStream(ms),
+            Image = new Bitmap(Image.FromStream(ms)),
             SizeMode = PictureBoxSizeMode.AutoSize,
         };
         col.Controls.Add(pic);
@@ -57,6 +57,14 @@ public sealed class QrForm : Form
             AutoSize = true,
             ForeColor = Color.DimGray,
         });
+
+        // ブラウザーで見る（アプリなし）
+        var web = $"https://{ips[0]}:{WebServer.Port}/?t={s.Token}";
+        col.Controls.Add(new Label { Text = L.T("qr_browser"), AutoSize = true, MaximumSize = new Size(420, 0), Margin = new Padding(3, 16, 3, 3) });
+        using var data2 = gen.CreateQrCode(web, QRCodeGenerator.ECCLevel.M);
+        using var ms2 = new MemoryStream(new PngByteQRCode(data2).GetGraphic(4));
+        col.Controls.Add(new PictureBox { Image = new Bitmap(Image.FromStream(ms2)), SizeMode = PictureBoxSizeMode.AutoSize });
+        col.Controls.Add(new TextBox { Text = web, ReadOnly = true, Width = 420 });
     }
 
     /// <summary>この PC の IPv4 アドレス。ゲートウェイのある（ふつうの）ネットワークを先にする</summary>

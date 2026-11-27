@@ -34,6 +34,7 @@ public sealed class MainForm : Form
     private string? _clipLast;
     private EventWaitHandle? _sendEvent;
     private Updater.Release? _pendingUpdate;
+    private NotificationWatcher? _notify;
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern bool AddClipboardFormatListener(IntPtr hwnd);
@@ -122,6 +123,9 @@ public sealed class MainForm : Form
                 Ui(() => ConnectUsb(true));
             });
         };
+        // PC の通知をタブレットへ
+        _notify = new NotificationWatcher(() => _s.ForwardNotifications && _server.Connected,
+            (app, title, body) => _server.BroadcastNotify(app, title, body));
         Shown += (_, _) => AfterShown();
         if (_startHidden) Task.Delay(3000).ContinueWith(_ => Ui(AfterShown));
 
@@ -318,6 +322,9 @@ public sealed class MainForm : Form
         var hevc = new CheckBox { Text = L.T("chk_hevc"), AutoSize = true, Checked = _s.UseHevc };
         hevc.CheckedChanged += (_, _) => { _s.UseHevc = hevc.Checked; _s.Save(); _server.ApplySettings(); };
         Row(hevc);
+        var notif = new CheckBox { Text = L.T("chk_notify"), AutoSize = true, Checked = _s.ForwardNotifications };
+        notif.CheckedChanged += (_, _) => { _s.ForwardNotifications = notif.Checked; _s.Save(); };
+        Row(notif);
         var clip = new CheckBox { Text = L.T("chk_clip"), AutoSize = true, Checked = _s.ShareClipboard };
         clip.CheckedChanged += (_, _) => { _s.ShareClipboard = clip.Checked; _s.Save(); };
         Row(clip);
@@ -410,6 +417,20 @@ public sealed class MainForm : Form
             });
         }));
         tools.Controls.Add(Btn("btn_update", () => CheckUpdate(quiet: false)));
+        tools.Controls.Add(Btn("btn_hotkeys", () =>
+        {
+            using var f = new HotkeyForm(_s);
+            f.ShowDialog(this);
+            RegisterHotkeys();
+        }));
+        tools.Controls.Add(Btn("btn_usage", () =>
+        {
+            var rows = Usage.Recent(14);
+            var text = rows.Count == 0 ? L.T("usage_none")
+                : string.Join(Environment.NewLine, rows.Select(r =>
+                    $"{r.day}   {(int)r.time.TotalHours}:{r.time.Minutes:00}   {Usage.Bytes(r.bytes)}"));
+            MessageBox.Show(this, L.T("usage_head") + Environment.NewLine + Environment.NewLine + text, L.T("btn_usage"));
+        }));
         tools.Controls.Add(Btn("btn_install_app", () => InstallApp()));
         tools.Controls.Add(Btn("btn_install_driver", InstallDriver));
         tools.Controls.Add(Btn("btn_uninstall_driver", UninstallDriver));
@@ -535,13 +556,62 @@ public sealed class MainForm : Form
         _status.Text = string.Format(L.T("profile_applied"), p.Name);
     }
 
-    // ---------- ショートカットキー（Ctrl+Alt+T：今のウィンドウを次の画面へ） ----------
+    // ---------- ショートカットキー（自分で決められる） ----------
+
+    private void RegisterHotkeys()
+    {
+        for (int i = 0; i < Hotkeys.Actions.Length; i++)
+        {
+            Win.UnregisterHotKey(Handle, HotkeyId + i);
+            var k = Hotkeys.Parse(Hotkeys.Get(_s, Hotkeys.Actions[i].action));
+            if (k == null) continue;
+            if (!Win.RegisterHotKey(Handle, HotkeyId + i, k.Value.mods | Win.MOD_NOREPEAT, (uint)k.Value.key))
+                Log.Write($"hotkey {Hotkeys.Get(_s, Hotkeys.Actions[i].action)} is in use");
+        }
+    }
+
+    private void RunHotkey(string action)
+    {
+        switch (action)
+        {
+            case "move_window":
+                Win.MoveForegroundToNext();
+                break;
+            case "next_mode":
+            {
+                // PC のみ は飛ばして順に
+                ShowMode[] order = { ShowMode.Extend, ShowMode.Duplicate, ShowMode.TabletOnly, ShowMode.Region };
+                int i = Array.IndexOf(order, _s.Mode);
+                _modeBox.SelectedIndex = (int)order[(i + 1) % order.Length];
+                _tray.ShowBalloonTip(1500, "TabDisplay", (string)_modeBox.SelectedItem!, ToolTipIcon.None);
+                break;
+            }
+            case "pc_only":
+                if (_s.Mode != ShowMode.PcOnly)
+                {
+                    _s.ModeBeforePcOnly = _s.Mode;
+                    _modeBox.SelectedIndex = (int)ShowMode.PcOnly;
+                }
+                else
+                {
+                    _modeBox.SelectedIndex = (int)_s.ModeBeforePcOnly;
+                }
+                break;
+            case "connect_usb":
+                ConnectUsb(false);
+                break;
+            case "disconnect":
+                _server.Disconnect();
+                break;
+        }
+    }
+
+    // ---------- （以下、窓の処理） ----------
 
     protected override void OnHandleCreated(EventArgs e)
     {
         base.OnHandleCreated(e);
-        if (!Win.RegisterHotKey(Handle, HotkeyId, Win.MOD_CONTROL | Win.MOD_ALT | Win.MOD_NOREPEAT, (uint)Keys.T))
-            Log.Write("hotkey Ctrl+Alt+T is in use");
+        RegisterHotkeys();
         AddClipboardFormatListener(Handle);
     }
 
@@ -564,10 +634,14 @@ public sealed class MainForm : Form
             }
             catch { }
         }
-        if (m.Msg == Win.WM_HOTKEY && m.WParam.ToInt32() == HotkeyId)
+        if (m.Msg == Win.WM_HOTKEY)
         {
-            try { Win.MoveForegroundToNext(); } catch (Exception ex) { Log.Write("move window: " + ex.Message); }
-            return;
+            int i = m.WParam.ToInt32() - HotkeyId;
+            if (i >= 0 && i < Hotkeys.Actions.Length)
+            {
+                try { RunHotkey(Hotkeys.Actions[i].action); } catch (Exception ex) { Log.Write("hotkey: " + ex.Message); }
+                return;
+            }
         }
         base.WndProc(ref m);
     }
@@ -780,6 +854,8 @@ public sealed class MainForm : Form
     {
         _exiting = true;
         _usbTimer.Stop();
+        _notify?.Dispose();
+        Usage.Save();
         _server.Dispose();
         // 切断の片付け（画面を戻す）が終わるのを少し待つ
         Thread.Sleep(300);

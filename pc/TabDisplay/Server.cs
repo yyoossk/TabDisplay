@@ -40,6 +40,12 @@ public sealed class Server : IDisposable
     internal void RaiseClip(string s) => ClipReceived?.Invoke(s);
     internal void RaiseFile(string path) => FileReceived?.Invoke(path);
 
+    /// <summary>PC の通知を全部のタブレットへ</summary>
+    public void BroadcastNotify(string app, string title, string body)
+    {
+        foreach (var s in Snapshot()) s.SendNotify(app, title, body);
+    }
+
     /// <summary>PC でコピーした文字を、つないでいる全部のタブレットへ</summary>
     public void BroadcastClip(string text)
     {
@@ -69,6 +75,13 @@ public sealed class Server : IDisposable
             _listener = new TcpListener(IPAddress.Any, _settings.Port);
             _listener.Start();
             new Thread(AcceptLoop) { IsBackground = true, Name = "accept" }.Start();
+            try
+            {
+                _web = new TcpListener(IPAddress.Any, WebServer.Port);
+                _web.Start();
+                new Thread(WebAcceptLoop) { IsBackground = true, Name = "web-accept" }.Start();
+            }
+            catch (Exception e) { Log.Write("web listen: " + e.Message); _web = null; }
             new Thread(LayoutLoop) { IsBackground = true, Name = "layout" }.Start();
             new Thread(StatsLoop) { IsBackground = true, Name = "stats" }.Start();
             _beacon = new Beacon(_settings);
@@ -92,7 +105,36 @@ public sealed class Server : IDisposable
         }
     }
 
-    private void Handle(TcpClient c)
+    private TcpListener? _web;
+
+    /// <summary>ブラウザーからの接続（ページか WebSocket）</summary>
+    private void WebAcceptLoop()
+    {
+        while (_web != null)
+        {
+            TcpClient c;
+            try { c = _web.AcceptTcpClient(); }
+            catch { break; }
+            new Thread(() =>
+            {
+                try
+                {
+                    c.NoDelay = true;
+                    c.ReceiveTimeout = 10000;
+                    var ws = WebServer.Accept(c);
+                    if (ws == null) { c.Close(); return; }
+                    Handle(c, ws);
+                }
+                catch (Exception e)
+                {
+                    Log.Write("web: " + e.Message);
+                    try { c.Close(); } catch { }
+                }
+            }) { IsBackground = true, Name = "web-session" }.Start();
+        }
+    }
+
+    private void Handle(TcpClient c, Stream? already = null)
     {
         Session? s = null;
         try
@@ -100,10 +142,18 @@ public sealed class Server : IDisposable
             c.NoDelay = true;
             c.SendBufferSize = 1024 * 1024;
             c.ReceiveTimeout = 5000;
-            // 通信は全部暗号化する（TLS）。タブレットは証明書の指紋で本物の PC か確かめる
-            var ssl = new SslStream(c.GetStream(), false);
-            ssl.AuthenticateAsServer(CertStore.Cert, false, SslProtocols.Tls12 | SslProtocols.Tls13, false);
-            Stream stream = ssl;
+            Stream stream;
+            if (already != null)
+            {
+                stream = already;
+            }
+            else
+            {
+                // 通信は全部暗号化する（TLS）。タブレットは証明書の指紋で本物の PC か確かめる
+                var ssl = new SslStream(c.GetStream(), false);
+                ssl.AuthenticateAsServer(CertStore.Cert, false, SslProtocols.Tls12 | SslProtocols.Tls13, false);
+                stream = ssl;
+            }
             var (type, data) = Protocol.Read(stream);
             if (type != Protocol.T_HELLO) return;
             var hello = Protocol.Json(data);
@@ -437,6 +487,18 @@ public sealed class Server : IDisposable
                 catch { }
             }
             var sb = new StringBuilder();
+            // 使用時間・通信量の記録（つないでいる間）
+            if (list.Count > 0)
+            {
+                long bytes = 0;
+                foreach (var x in list)
+                {
+                    var now = Interlocked.Read(ref x.BytesSent);
+                    bytes += now - x.BytesCounted;
+                    x.BytesCounted = now;
+                }
+                Usage.Add(1, bytes);
+            }
             foreach (var s in list)
             {
                 s.AdaptTick();
@@ -460,6 +522,8 @@ public sealed class Server : IDisposable
         _beacon?.Dispose();
         try { _listener?.Stop(); } catch { }
         _listener = null;
+        try { _web?.Stop(); } catch { }
+        _web = null;
         foreach (var s in Snapshot())
         {
             s.Close();
@@ -492,6 +556,8 @@ internal sealed class Session
     public volatile bool InputOnly;
     /// <summary>タブレットが H.265 を再生できる</summary>
     public bool CanHevc;
+    /// <summary>コントラスト（1.0 = そのまま）。タブレットの設定</summary>
+    public double Contrast = 1.0;
     /// <summary>つないだら開くソフトをもう開いたか</summary>
     public bool AppsLaunched;
     // 画質の方針（自動のとき）
@@ -508,6 +574,9 @@ internal sealed class Session
     // 統計と画質の自動調整
     public int Fps, Lat, Rtt;
     public int CurrentMbps;
+    /// <summary>送った量（使用記録のため）</summary>
+    public long BytesSent;
+    public long BytesCounted;
     private int _drops;
     private long _lastRateChange;
     private long _lastTrouble;
@@ -528,6 +597,7 @@ internal sealed class Session
         Dpi = (int?)hello["dpi"] ?? 160;
         InputOnly = (bool?)hello["inputOnly"] ?? false;
         CanHevc = (bool?)hello["hevc"] ?? false;
+        Contrast = (double?)hello["contrast"] ?? 1.0;
         CurrentMbps = _settings.BitrateMbps;
         _lastRateChange = Environment.TickCount64;
         Log.Write($"tablet {TabletName} {TabW}x{TabH} dpi {Dpi} from {client.Client.RemoteEndPoint}");
@@ -595,11 +665,17 @@ internal sealed class Session
                 case Protocol.T_OPTS:
                 {
                     var j = Protocol.Json(data);
-                    var io = (bool?)j["inputOnly"] ?? false;
+                    var io = (bool?)j["inputOnly"] ?? InputOnly;
                     if (io != InputOnly)
                     {
                         InputOnly = io;
                         _server.RequestLayout(null); // 仮想ディスプレイの枚数が変わる
+                    }
+                    var ct = (double?)j["contrast"] ?? Contrast;
+                    if (Math.Abs(ct - Contrast) > 0.01)
+                    {
+                        Contrast = ct;
+                        _server.RequestLayout(this);
                     }
                     break;
                 }
@@ -650,6 +726,9 @@ internal sealed class Session
     private readonly Dictionary<int, FileTransfer.Incoming> _incoming = new();
     private int _nextFileId = 1;
     private int _captureRetries;
+
+    public void SendNotify(string app, string title, string body) =>
+        Send(Protocol.Pack(Protocol.P_NOTIFY, new JsonObject { ["app"] = app, ["title"] = title, ["body"] = body }));
 
     public void SendClip(string text)
     {
@@ -709,7 +788,7 @@ internal sealed class Session
             SendStatus("ok");
             var spec = new CaptureSpec(target.DeviceName, target.Width, target.Height, outW, outH,
                 _settings.Fps, Math.Clamp(CurrentMbps, 1, _settings.BitrateMbps), _settings.SkipStatic,
-                offX, offY, region, TextQualityNow, _settings.UseHevc && CanHevc);
+                offX, offY, region, TextQualityNow, _settings.UseHevc && CanHevc, Contrast);
             var cap = new Capture(spec, _settings);
             cap.Config += (w, h, codec, vps, sps, pps) =>
             {
@@ -898,6 +977,7 @@ internal sealed class Session
         try
         {
             lock (_writeLock) _stream.Write(buf, 0, buf.Length);
+            Interlocked.Add(ref BytesSent, buf.Length);
         }
         catch
         {

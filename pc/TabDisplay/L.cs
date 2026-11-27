@@ -72,6 +72,19 @@ public static class L
         ["side_bottom"] = "PC の画面の下",
         ["chk_skip"] = "省電力：画面が変わらないときは送らない",
         ["tray_mode"] = "表示のしかた",
+        ["qr_browser"] = "ブラウザーで見る（アプリなし・Chrome / Edge）：このコードかアドレスを開いてください。初めは「安全ではない」と出るので「詳細 → このまま進む」を選びます",
+        ["btn_hotkeys"] = "ショートカットキー",
+        ["hk_title"] = "ショートカットキー",
+        ["hk_help"] = "欄を選んで、使いたいキー（Ctrl・Alt・Shift のどれかと一緒に）を押してください。Delete で消します。",
+        ["hk_move_window"] = "今のウィンドウを次の画面へ",
+        ["hk_next_mode"] = "表示のしかたを切り替える",
+        ["hk_pc_only"] = "タブレットの画面を消す／戻す",
+        ["hk_connect_usb"] = "USB でつなぐ",
+        ["hk_disconnect"] = "切断",
+        ["chk_notify"] = "PC の通知をタブレットに出す",
+        ["btn_usage"] = "使用時間・通信量",
+        ["usage_head"] = "日付　　　　時間　　送った量（最近 14 日）",
+        ["usage_none"] = "まだ記録がありません",
         ["chk_hevc"] = "H.265 で送る（グラボとタブレットが対応しているとき。送る量が減ります）",
         ["chk_clip"] = "クリップボード（コピーした文字）をタブレットと共有する",
         ["btn_send_files"] = "ファイルをタブレットへ送る",
@@ -143,7 +156,7 @@ public static class L
         ["btn_profile_save"] = "今の設定を保存",
         ["btn_profile_delete"] = "消す",
         ["profile_applied"] = "「{0}」の設定にしました",
-        ["hotkey_help"] = "Ctrl + Alt + T：今のウィンドウを次の画面（タブレット）へ移す。もう一度押すと、その次の画面へ",
+        ["hotkey_help"] = "Ctrl + Alt + T：今のウィンドウを次の画面（タブレット）へ移す。もう一度押すと、その次の画面へ（キーは「ショートカットキー」で変えられます。ほかに表示の切り替え・タブレットの画面を消す・USB でつなぐ・切断）",
         ["chk_dpi"] = "文字の大きさ（拡大率）をタブレットに合わせる",
         ["chk_adaptive"] = "回線の混み具合に合わせて画質を自動で調整する（上の画質が上限）",
         ["tray_open"] = "開く",
@@ -174,7 +187,9 @@ public static class L
             "・ゲームパッドのボタンは、キーボードのキー（矢印・Z・X など）として PC に届きます。\n" +
             "・「文字をくっきり」は、動きの多い画面では少しカクつくことがあります。\n" +
             "・クリップボードの共有は文字だけです（画像は共有しません）。タブレット側は TabDisplay を開いている間だけ届きます。\n" +
-            "・PC がロック中は、Windows の決まりで画面を撮れません。ロックを外すと自動で映し直します。",
+            "・PC がロック中は、Windows の決まりで画面を撮れません。ロックを外すと自動で映し直します。\n" +
+            "・ブラウザーで見るときは、操作はタップ・長押し・スクロールだけで、音は鳴りません。\n" +
+            "・PC の通知の転送は、Windows がしまっている通知を読むので、出るまで数秒かかります。",
     };
 
     private static readonly Dictionary<string, string> En = new()
@@ -225,6 +240,19 @@ public static class L
         ["side_bottom"] = "Below the PC screen",
         ["chk_skip"] = "Power saving: send nothing while the screen does not change",
         ["tray_mode"] = "Show on",
+        ["qr_browser"] = "View in a browser (no app, Chrome / Edge): open this code or address. The first time, the browser warns that it is not secure; choose \"Advanced → Proceed\".",
+        ["btn_hotkeys"] = "Shortcut keys",
+        ["hk_title"] = "Shortcut keys",
+        ["hk_help"] = "Select a box and press the keys to use (with Ctrl, Alt or Shift). Delete clears it.",
+        ["hk_move_window"] = "Move the current window to the next screen",
+        ["hk_next_mode"] = "Switch how to show",
+        ["hk_pc_only"] = "Turn the tablet picture off / on",
+        ["hk_connect_usb"] = "Connect with USB",
+        ["hk_disconnect"] = "Disconnect",
+        ["chk_notify"] = "Show PC notifications on the tablet",
+        ["btn_usage"] = "Usage time and data",
+        ["usage_head"] = "Date        Time    Data sent (last 14 days)",
+        ["usage_none"] = "No records yet",
         ["chk_hevc"] = "Send with H.265 when the graphics card and tablet support it (less data)",
         ["chk_clip"] = "Share the clipboard (copied text) with tablets",
         ["btn_send_files"] = "Send files to the tablet",
@@ -327,6 +355,8 @@ public static class L
             "- Gamepad buttons reach the PC as keyboard keys (arrows, Z, X, and so on).\n" +
             "- \"Sharp text\" may be a little choppy on screens with a lot of motion.\n" +
             "- Clipboard sharing is text only (no images). On the tablet it works while TabDisplay is open.\n" +
-            "- While the PC is locked, Windows does not allow screen capture. The picture comes back automatically after unlocking.",
+            "- While the PC is locked, Windows does not allow screen capture. The picture comes back automatically after unlocking.\n" +
+            "- In a browser, only tap, long press and scroll work, and there is no sound.\n" +
+            "- PC notifications are read from Windows' notification store, so they appear a few seconds late.",
     };
 }

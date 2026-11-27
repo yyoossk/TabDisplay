@@ -18,7 +18,7 @@ public static class Protocol
     public const byte T_HELLO = 1, T_INPUT = 2, T_SIZE = 3, T_PING = 4, T_IDR = 5, T_STATS = 6, T_BYE = 7, T_OPTS = 8, T_CLIP = 9,
         T_FILE_BEGIN = 30, T_FILE_DATA = 31, T_FILE_END = 32;
     // PC → タブレット
-    public const byte P_CONFIG = 10, P_VIDEO = 11, P_PONG = 12, P_STATUS = 13, P_ERROR = 14, P_AUDIO_CFG = 15, P_AUDIO = 16, P_AREA = 17, P_CLIP = 18,
+    public const byte P_CONFIG = 10, P_VIDEO = 11, P_PONG = 12, P_STATUS = 13, P_ERROR = 14, P_AUDIO_CFG = 15, P_AUDIO = 16, P_AREA = 17, P_CLIP = 18, P_NOTIFY = 19,
         P_FILE_BEGIN = 40, P_FILE_DATA = 41, P_FILE_END = 42;
 
     public const byte F_KEY = 1, F_CONFIG = 2;
