@@ -75,6 +75,13 @@ public static class L
         ["qr_browser"] = "ブラウザーで見る（アプリなし・Chrome / Edge）：このコードかアドレスを開いてください。初めは「安全ではない」と出るので「詳細 → このまま進む」を選びます",
         ["btn_hotkeys"] = "ショートカットキー",
         ["btn_changelog"] = "更新履歴",
+        ["tab_show"] = "映す",
+        ["mode_span"] = "2 台以上のタブレットを 1 つの大きな画面に",
+        ["lbl_pin"] = "PIN（つなぐときに入れる数字）",
+        ["pin_help"] = "空ならなし。決めると、タブレットは初めてつなぐときに PIN を聞きます（USB の「接続する」では自動で渡します）。会社など人の多い場所向けです",
+        ["tab_input"] = "入力・音・連携",
+        ["tab_connect"] = "つなぐ・道具",
+        ["tab_other"] = "そのほか",
         ["chk_camera"] = "タブレットのカメラを PC の Web カメラにする",
         ["cam_front"] = "前のカメラ",
         ["cam_back"] = "後ろのカメラ",
@@ -197,6 +204,7 @@ public static class L
             "・「タブレットのみ」で切断したときは、PC の画面を自動で元に戻します。\n" +
             "・ゲームパッドのボタンは、キーボードのキー（矢印・Z・X など）として PC に届きます。\n" +
             "・「文字をくっきり」は、動きの多い画面では少しカクつくことがあります。\n" +
+            "・「1 つの大きな画面に」は、タブレットを横向きでつないだ順に左から並べます。回転には合わせません。\n" +
             "・クリップボードの共有は文字だけです（画像は共有しません）。タブレット側は TabDisplay を開いている間だけ届きます。\n" +
             "・PC がロック中は、Windows の決まりで画面を撮れません。ロックを外すと自動で映し直します。\n" +
             "・ブラウザーで見るときは、操作はタップ・長押し・スクロールだけで、音は鳴りません。\n" +
@@ -255,6 +263,13 @@ public static class L
         ["qr_browser"] = "View in a browser (no app, Chrome / Edge): open this code or address. The first time, the browser warns that it is not secure; choose \"Advanced → Proceed\".",
         ["btn_hotkeys"] = "Shortcut keys",
         ["btn_changelog"] = "Change history",
+        ["tab_show"] = "Display",
+        ["mode_span"] = "Join two or more tablets into one large screen",
+        ["lbl_pin"] = "PIN (number entered when connecting)",
+        ["pin_help"] = "Empty = none. If set, a tablet asks for the PIN the first time it connects (\"Connect (USB)\" passes it automatically). Useful in offices and other busy places.",
+        ["tab_input"] = "Input, sound, links",
+        ["tab_connect"] = "Connect, tools",
+        ["tab_other"] = "Other",
         ["chk_camera"] = "Use the tablet's camera as the PC's webcam",
         ["cam_front"] = "Front camera",
         ["cam_back"] = "Back camera",
@@ -377,6 +392,7 @@ public static class L
             "- In \"Tablet only\", the PC screens are restored automatically when the tablet disconnects.\n" +
             "- Gamepad buttons reach the PC as keyboard keys (arrows, Z, X, and so on).\n" +
             "- \"Sharp text\" may be a little choppy on screens with a lot of motion.\n" +
+            "- \"One large screen\" places the tablets from left to right in the order they connected, in landscape. It does not follow rotation.\n" +
             "- Clipboard sharing is text only (no images). On the tablet it works while TabDisplay is open.\n" +
             "- While the PC is locked, Windows does not allow screen capture. The picture comes back automatically after unlocking.\n" +
             "- In a browser, only tap, long press and scroll work, and there is no sound.\n" +

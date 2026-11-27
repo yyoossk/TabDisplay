@@ -51,6 +51,7 @@ class Connection(
         fun onApps(items: org.json.JSONArray)
         fun onSleep(on: Boolean)
         fun wantsNotify(): Boolean
+        fun pin(): String
         fun contrast(): Double
     }
 
@@ -233,7 +234,7 @@ class Connection(
                 Protocol.P_ERROR -> {
                     val j = JSONObject(String(m.data, Charsets.UTF_8))
                     listener.onError(j.optString("e"))
-                    if (j.optString("e") == "token") {
+                    if (j.optString("e") == "token" || j.optString("e") == "pin") {
                         closed = true
                     }
                     return
@@ -251,6 +252,7 @@ class Connection(
         j.put("hevc", VideoDecoder.canHevc(w, h))
         j.put("contrast", listener.contrast())
         j.put("notify", listener.wantsNotify())
+        j.put("pin", listener.pin())
         j.put("name", (Build.MANUFACTURER + " " + Build.MODEL).trim())
         j.put("w", w)
         j.put("h", h)

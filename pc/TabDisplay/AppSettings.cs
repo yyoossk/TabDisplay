@@ -16,6 +16,8 @@ public enum ShowMode
     PcOnly = 3,
     /// <summary>PC の画面の一部（ウィンドウ 1 つ・選んだ範囲）だけ映す</summary>
     Region = 4,
+    /// <summary>2 台以上のタブレットを横に並べて、1 つの大きな画面にする</summary>
+    Span = 5,
 }
 
 /// <summary>画質の方針</summary>
@@ -115,6 +117,8 @@ public class AppSettings
     public List<string> LauncherApps { get; set; } = new();
     /// <summary>PC を何分使わなかったらタブレットの画面を消すか（0 = 消さない）</summary>
     public int SleepMinutes { get; set; } = 10;
+    /// <summary>つなぐときの PIN（数字。空なら使わない）</summary>
+    public string Pin { get; set; } = "";
     /// <summary>はじめの設定の案内をもう見た</summary>
     public bool WizardDone { get; set; } = false;
     /// <summary>最後に更新を確かめた日時</summary>

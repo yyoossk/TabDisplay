@@ -54,6 +54,7 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
     private lateinit var tpButton: TextView
     private lateinit var sideBar: LinearLayout
     private lateinit var padView: View
+    private var buttonsCol: View? = null
     private lateinit var splitPanel: LinearLayout
     private lateinit var splitButtons: LinearLayout
     private lateinit var splitButton: TextView
@@ -122,6 +123,12 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
         } catch (_: Exception) { 0 }
 
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        // 画面の向き（設定で固定できる）
+        requestedOrientation = when (prefs.orientation) {
+            1 -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            2 -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+            else -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
+        }
 
         root = FrameLayout(this)
         root.setBackgroundColor(Color.BLACK)
@@ -174,6 +181,7 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
             sideScroll.visibility = if (sideScroll.visibility == View.VISIBLE) View.GONE else View.VISIBLE
         }
         val buttons = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        buttonsCol = buttons
         ioButton = roundButton("✎") { toggleInputOnly() }
         stripButton = roundButton("◧") {
             prefs.buttonStrip = !prefs.buttonStrip
@@ -364,6 +372,20 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
                 gravity = Gravity.CENTER
                 setPadding(dp(6), dp(12), dp(6), dp(12))
                 setOnClickListener { action() }
+            })
+        }
+        // 定型文：タップで PC に入力
+        for (text in prefs.snippets) {
+            sideBar.addView(TextView(this).apply {
+                this.text = "✎ " + if (text.length > 12) text.take(12) + "…" else text
+                setTextColor(0xFF80DEEA.toInt())
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                gravity = Gravity.CENTER
+                setPadding(dp(6), dp(10), dp(6), dp(10))
+                setOnClickListener {
+                    if (prefs.haptic) performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                    conn?.post(Protocol.T_INPUT, JSONObject().put("k", "text").put("s", text))
+                }
             })
         }
         for (id in prefs.shortcuts) {
@@ -1195,6 +1217,40 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
         while (list.childCount > 30) list.removeViewAt(list.childCount - 1)
     }
 
+    // ---------- 小窓（ピクチャー・イン・ピクチャー、Android 8 以降） ----------
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (!prefs.pip || Build.VERSION.SDK_INT < 26 || cfgW <= 0 || prefs.mini) return
+        try {
+            // 縦横比は 1:2.39〜2.39:1 の間にする（Android の決まり）
+            var w = cfgW
+            var h = cfgH
+            if (w > h * 239 / 100) w = h * 239 / 100
+            if (h > w * 239 / 100) h = w * 239 / 100
+            enterPictureInPictureMode(android.app.PictureInPictureParams.Builder()
+                .setAspectRatio(android.util.Rational(w, h)).build())
+        } catch (_: Exception) {}
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        // 小窓のときは、映像だけ出す
+        val v = if (isInPictureInPictureMode) View.GONE else View.VISIBLE
+        buttonsCol?.visibility = v
+        if (isInPictureInPictureMode) {
+            sideScroll.visibility = View.GONE
+            strip.visibility = View.GONE
+            gamepad.visibility = View.GONE
+            splitPanel.visibility = View.GONE
+            message.visibility = View.GONE
+        } else {
+            updateModeButtons()
+            applySplit()
+        }
+        ui.postDelayed({ layoutVideo() }, 100)
+    }
+
     // ---------- 接続 ----------
 
     override fun onConnecting(host: String) {
@@ -1282,12 +1338,42 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
 
     override fun onError(e: String) {
         ui.post {
+            if (e == "pin") {
+                askPin()
+                return@post
+            }
             showMessage(when (e) {
                 "token" -> getString(R.string.err_token)
                 "tls" -> getString(R.string.err_tls)
                 else -> e
             })
         }
+    }
+
+    override fun pin(): String {
+        val t = target ?: return ""
+        return prefs.pinFor(t.token).ifEmpty { t.pin }
+    }
+
+    /** PC に PIN を聞かれた：入れてもらって、つなぎ直す */
+    private fun askPin() {
+        val t = target ?: return
+        val box = EditText(this).apply {
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            hint = getString(R.string.pin_hint)
+        }
+        android.app.AlertDialog.Builder(this)
+            .setTitle(getString(R.string.pin_title, t.name))
+            .setView(box)
+            .setCancelable(false)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                prefs.setPin(t.token, box.text.toString().trim())
+                conn?.close()
+                showMessage(getString(R.string.connecting, t.name))
+                conn = Connection(t, this).also { it.start() }
+            }
+            .setNegativeButton(android.R.string.cancel) { _, _ -> finish() }
+            .show()
     }
 
     override fun onLost(willRetry: Boolean) {
@@ -1697,6 +1783,14 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
             return true
         }
         val down = event.action == KeyEvent.ACTION_DOWN
+        // 「キーで送る」モード（ゲーム向け）：記号も含めて全部キーで送る
+        if (prefs.keyMode) {
+            val vk = KeyMap.toVkAll(code)
+            if (vk != null) {
+                conn?.post(Protocol.T_INPUT, JSONObject().put("k", "key").put("vk", vk).put("d", down))
+                return true
+            }
+        }
         if (KeyMap.isPlainChar(event)) {
             if (down) sendKeyInput("text", event.unicodeChar.toChar().toString())
             return true

@@ -100,7 +100,7 @@ function hex(n) { return n.toString(16).padStart(2, '0'); }
 function connect() {
   msg(T.conn);
   ws = new WebSocket('wss://' + location.host + '/ws'); ws.binaryType = 'arraybuffer';
-  ws.onopen = () => { const [w, h, dpi] = size(); send(1, {token, id, name: 'Browser', w, h, dpi, ver: 1, hevc: false}); };
+  ws.onopen = () => { const [w, h, dpi] = size(); send(1, {token, id, name: 'Browser', w, h, dpi, ver: 1, hevc: false, pin: localStorage.getItem('tdpin') || ''}); };
   ws.onclose = () => { msg(T.lost); setTimeout(connect, 1500); };
   ws.onmessage = e => {
     const b = new Uint8Array(e.data), t = b[0], p = b.subarray(5);
@@ -122,7 +122,14 @@ function connect() {
     } else if (t === 13) {
       const s = JSON.parse(decT.decode(p)).s;
       msg(s === 'pc_only' ? T.pconly : s === 'ok' ? T.wait : s);
-    } else if (t === 14) { msg(T.token); ws.onclose = null; ws.close(); }
+    } else if (t === 14) {
+      const e = JSON.parse(decT.decode(p)).e;
+      if (e === 'pin') {
+        const v = prompt(ja ? 'PIN を入れてください' : 'Enter the PIN', '');
+        if (v) { localStorage.setItem('tdpin', v); return; }   // 閉じられたあと、つなぎ直しで送る
+      }
+      msg(T.token); ws.onclose = null; ws.close();
+    }
   };
 }
 setInterval(() => send(4, {tab: Math.round(performance.now() * 1000)}), 1000);

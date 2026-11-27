@@ -136,4 +136,14 @@
     <string name="opt_mini">Mini screen (for phones): a clock, PC notifications and shortcut buttons instead of the PC screen</string>
     <string name="opt_ntouch">Send touches as Windows touch (instead of mouse)</string>
     <string name="opt_left">Left-handed: put the buttons on the left (applies the next time you connect)</string>
+    <string name="pin_title">PIN for %1$s</string>
+    <string name="pin_hint">The PIN set on the PC</string>
+    <string name="opt_orient">Screen orientation</string>
+    <string name="orient_auto">Automatic</string>
+    <string name="orient_land">Landscape</string>
+    <string name="orient_port">Portrait</string>
+    <string name="opt_pip">Keep showing in a small window when another app is opened (Android 8 or later)</string>
+    <string name="opt_keymode">Send keys as keys (for games). Off: send as characters, which works with any keyboard layout</string>
+    <string name="snippets_title">Text snippets</string>
+    <string name="snippets_help">One per line. They appear in the ☰ menu; tap one to type it on the PC.</string>
 </resources>

@@ -136,4 +136,14 @@
     <string name="opt_mini">ミニ画面（スマホ向け）：PC の画面の代わりに、時計・PC の通知・ショートカットのボタンを出す</string>
     <string name="opt_ntouch">タッチを Windows のタッチとして送る（マウスの代わりに）</string>
     <string name="opt_left">左利き：ボタンを左側に置く（次につないだときから）</string>
+    <string name="pin_title">%1$s の PIN</string>
+    <string name="pin_hint">PC で決めた PIN</string>
+    <string name="opt_orient">画面の向き</string>
+    <string name="orient_auto">自動</string>
+    <string name="orient_land">横に固定</string>
+    <string name="orient_port">縦に固定</string>
+    <string name="opt_pip">ほかのアプリを開いたら、小窓で出し続ける（Android 8 以降）</string>
+    <string name="opt_keymode">キーで送る（ゲーム向け）。オフなら文字で送る（キーボードの配列に左右されない）</string>
+    <string name="snippets_title">定型文</string>
+    <string name="snippets_help">1 行に 1 つ。☰ のメニューに並び、タップすると PC に入力します。</string>
 </resources>

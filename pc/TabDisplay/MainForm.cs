@@ -159,15 +159,33 @@ public sealed class MainForm : Form
 
     private void BuildUi()
     {
-        var p = new TableLayoutPanel
+        // 上：状態とつなぐボタン（いつも見える）。下：タブ（映す・入力と音・つなぐ・そのほか）
+        TableLayoutPanel NewPanel() => new()
         {
             ColumnCount = 2,
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            Padding = new Padding(12),
-            Dock = DockStyle.Fill,
+            Padding = new Padding(8),
         };
-        Controls.Add(p);
+        var outer = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, WrapContents = false, Padding = new Padding(4) };
+        Controls.Add(outer);
+        var top = NewPanel();
+        outer.Controls.Add(top);
+        var tabs = new TabControl { Width = 620, Height = 520 };
+        outer.Controls.Add(tabs);
+        TableLayoutPanel Tab(string key)
+        {
+            var page = new TabPage(L.T(key)) { AutoScroll = true };
+            var panel = NewPanel();
+            page.Controls.Add(panel);
+            tabs.TabPages.Add(page);
+            return panel;
+        }
+        var tShow = Tab("tab_show");
+        var tInput = Tab("tab_input");
+        var tConnect = Tab("tab_connect");
+        var tOther = Tab("tab_other");
+        var p = top;
 
         void Row(Control a, Control? b = null)
         {
@@ -200,9 +218,10 @@ public sealed class MainForm : Form
         buttons.Controls.AddRange(new Control[] { _btnUsb, _btnWifi, _btnDisconnect });
         Row(buttons);
 
+        p = tShow;
         // 表示のしかた
         var mode = _modeBox = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 260 };
-        mode.Items.AddRange(new object[] { L.T("mode_extend"), L.T("mode_duplicate"), L.T("mode_tablet"), L.T("mode_pc"), L.T("mode_region") });
+        mode.Items.AddRange(new object[] { L.T("mode_extend"), L.T("mode_duplicate"), L.T("mode_tablet"), L.T("mode_pc"), L.T("mode_region"), L.T("mode_span") });
         mode.SelectedIndex = (int)_s.Mode;
         mode.SelectedIndexChanged += (_, _) =>
         {
@@ -281,6 +300,7 @@ public sealed class MainForm : Form
         };
         Row(Lbl("lbl_bitrate"), br);
 
+        p = tOther;
         var lang = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160 };
         lang.Items.AddRange(new object[] { L.T("lang_system"), "日本語", "English" });
         lang.SelectedIndex = _s.Language switch { "ja" => 1, "en" => 2, _ => 0 };
@@ -305,9 +325,11 @@ public sealed class MainForm : Form
         Row(startup);
         Row(tray);
 
+        p = tInput;
         var audio = _audioBox = new CheckBox { Text = L.T("chk_audio"), AutoSize = true, Checked = _s.AudioToTablet };
         audio.CheckedChanged += (_, _) => { _s.AudioToTablet = audio.Checked; _s.Save(); _server.ApplySettings(); };
         Row(audio);
+        p = tShow;
         var dpi = _dpiBox = new CheckBox { Text = L.T("chk_dpi"), AutoSize = true, Checked = _s.AutoDpi };
         dpi.CheckedChanged += (_, _) => { _s.AutoDpi = dpi.Checked; _s.Save(); _server.ApplySettings(); };
         Row(dpi);
@@ -322,6 +344,7 @@ public sealed class MainForm : Form
         var hevc = new CheckBox { Text = L.T("chk_hevc"), AutoSize = true, Checked = _s.UseHevc };
         hevc.CheckedChanged += (_, _) => { _s.UseHevc = hevc.Checked; _s.Save(); _server.ApplySettings(); };
         Row(hevc);
+        p = tInput;
         var notif = new CheckBox { Text = L.T("chk_notify"), AutoSize = true, Checked = _s.ForwardNotifications };
         notif.CheckedChanged += (_, _) => { _s.ForwardNotifications = notif.Checked; _s.Save(); };
         Row(notif);
@@ -352,6 +375,7 @@ public sealed class MainForm : Form
         Row(mic, micOut);
         Row(new Label { Text = L.T("cam_mic_help"), AutoSize = true, ForeColor = Color.DimGray, MaximumSize = new Size(540, 0) });
 
+        p = tConnect;
         // つないだまま画面を消す
         var sleep = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160 };
         int[] mins = { 0, 5, 10, 15, 30, 60 };
@@ -364,6 +388,7 @@ public sealed class MainForm : Form
         autoUsb.CheckedChanged += (_, _) => { _s.AutoConnectUsb = autoUsb.Checked; _s.Save(); };
         Row(autoUsb);
 
+        p = tInput;
         // つないだら開くソフト
         Row(new Label { Text = L.T("lbl_apps"), AutoSize = true, Margin = new Padding(3, 10, 3, 3) });
         var apps = _appsBox = new TextBox { Multiline = true, Width = 520, Height = 60, ScrollBars = ScrollBars.Vertical,
@@ -391,6 +416,14 @@ public sealed class MainForm : Form
             _s.Save();
         };
         Row(launcher);
+
+        p = tConnect;
+        // PIN（つなぐときに数字を入れてもらう）
+        var pin = new TextBox { Width = 120, Text = _s.Pin, MaxLength = 8 };
+        pin.KeyPress += (_, e) => { if (!char.IsDigit(e.KeyChar) && !char.IsControl(e.KeyChar)) e.Handled = true; };
+        pin.Leave += (_, _) => { _s.Pin = pin.Text.Trim(); _s.Save(); };
+        Row(Lbl("lbl_pin"), pin);
+        Row(new Label { Text = L.T("pin_help"), AutoSize = true, ForeColor = Color.DimGray, MaximumSize = new Size(540, 0) });
 
         // 設定の組み合わせ
         var prof = _profileBox = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 200 };
@@ -483,6 +516,7 @@ public sealed class MainForm : Form
         }));
         Row(tools);
 
+        p = tOther;
         // 注意書き
         var notesTitle = new Label { Text = L.T("notes_title"), AutoSize = true, Font = new Font(Font, FontStyle.Bold), Margin = new Padding(3, 12, 3, 3) };
         Row(notesTitle);
@@ -653,7 +687,7 @@ public sealed class MainForm : Form
             case "next_mode":
             {
                 // PC のみ は飛ばして順に
-                ShowMode[] order = { ShowMode.Extend, ShowMode.Duplicate, ShowMode.TabletOnly, ShowMode.Region };
+                ShowMode[] order = { ShowMode.Extend, ShowMode.Duplicate, ShowMode.TabletOnly, ShowMode.Region, ShowMode.Span };
                 int i = Array.IndexOf(order, _s.Mode);
                 _modeBox.SelectedIndex = (int)order[(i + 1) % order.Length];
                 _tray.ShowBalloonTip(1500, "TabDisplay", (string)_modeBox.SelectedItem!, ToolTipIcon.None);
@@ -762,7 +796,7 @@ public sealed class MainForm : Form
                     }
                     SetStatus("usb_starting");
                     if (!Adb.Reverse(dev.Serial, _s.Port) ||
-                        !Adb.Launch(dev.Serial, _s.Port, _s.Token, Environment.MachineName))
+                        !Adb.Launch(dev.Serial, _s.Port, _s.Token, Environment.MachineName, _s.Pin))
                     {
                         SetStatus("usb_failed");
                     }
@@ -858,7 +892,7 @@ public sealed class MainForm : Form
         m.Items.Add(new ToolStripSeparator());
 
         var modeMenu = new ToolStripMenuItem(L.T("tray_mode"));
-        string[] modeKeys = { "mode_extend", "mode_duplicate", "mode_tablet", "mode_pc", "mode_region" };
+        string[] modeKeys = { "mode_extend", "mode_duplicate", "mode_tablet", "mode_pc", "mode_region", "mode_span" };
         for (int i = 0; i < modeKeys.Length; i++)
         {
             int idx = i;

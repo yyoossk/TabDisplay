@@ -192,6 +192,13 @@ public sealed class Server : IDisposable
                 stream.Write(Protocol.Pack(Protocol.P_ERROR, new JsonObject { ["e"] = "token" }));
                 return;
             }
+            // PIN（設定したときだけ）
+            if (_settings.Pin.Length > 0 && (string?)hello["pin"] != _settings.Pin)
+            {
+                Log.Write("pin mismatch from " + c.Client.RemoteEndPoint);
+                stream.Write(Protocol.Pack(Protocol.P_ERROR, new JsonObject { ["e"] = "pin" }));
+                return;
+            }
             c.ReceiveTimeout = 0;
 
             s = new Session(this, c, stream, hello);
@@ -323,6 +330,35 @@ public sealed class Server : IDisposable
             return;
         }
 
+        // 2 台以上を 1 つの大きな画面に：横に並べた大きさの仮想ディスプレイを 1 枚作り、左から順に分けて映す
+        if (mode == ShowMode.Span && list.Count >= 2 && VirtualDisplay.IsInstalled)
+        {
+            RaiseStatus("st_preparing");
+            var parts = list.Select(x => { var (w, h) = (x.TabW, x.TabH); if (h > w) (w, h) = (h, w); return (w: Even(w), h: Even(h)); }).ToList();
+            int total = parts.Sum(x => x.w), height = parts.Max(x => x.h);
+            var ds = VirtualDisplay.EnableMany(new[] { (total, height) }, _settings.Fps);
+            var d = ds?.FirstOrDefault();
+            if (d == null)
+            {
+                foreach (var x in list) x.SetOff("no_driver");
+                RaiseStatus("st_vdd_failed");
+                return;
+            }
+            Displays.PlaceVirtuals(new[] { d.DeviceName }, _settings.Side);
+            if (_settings.AutoDpi) DpiScale.Set(d.DeviceName, DpiScale.PercentForTablet(list[0].Dpi));
+            d = VirtualDisplay.Refetch(new[] { d.DeviceName })?.FirstOrDefault() ?? d;
+            int off = 0;
+            for (int i = 0; i < list.Count; i++)
+            {
+                var (w, h) = parts[i];
+                var target = d with { X = d.X + off, Width = w, Height = Math.Min(h, d.Height) };
+                list[i].VirtualName = d.DeviceName;
+                list[i].StartCapture(target, w, target.Height, off, 0, region: true);
+                off += w;
+            }
+            return;
+        }
+
         switch (mode)
         {
             case ShowMode.PcOnly:
@@ -404,6 +440,7 @@ public sealed class Server : IDisposable
     private void LayoutOne(Session s)
     {
         if (s.Closed || s.InputOnly) return;
+        if (_settings.Mode == ShowMode.Span) { RequestLayout(null); return; }
         switch (_settings.Mode)
         {
             case ShowMode.Region:

@@ -106,11 +106,12 @@ public static class Adb
 
     public static void RemoveReverse(string serial, int port) => Run($"-s {serial} reverse --remove tcp:{port}", 5000);
 
-    public static bool Launch(string serial, int port, string token, string pcName)
+    public static bool Launch(string serial, int port, string token, string pcName, string pin = "")
     {
         var name = Regex.Replace(pcName, @"[^A-Za-z0-9_\-]", "");
         if (name.Length == 0) name = "PC";
-        var cmd = $"am start -n {Package}/.DisplayActivity --es host 127.0.0.1 --ei port {port} --es token {token} --es fp {CertStore.Fingerprint} --es name {name}";
+        var cmd = $"am start -n {Package}/.DisplayActivity --es host 127.0.0.1 --ei port {port} --es token {token} --es fp {CertStore.Fingerprint} --es name {name}" +
+                  (System.Text.RegularExpressions.Regex.IsMatch(pin, "^[0-9]{1,8}$") ? $" --es pin {pin}" : "");
         var (code, o) = Run($"-s {serial} shell {cmd}");
         return code == 0 && !o.Contains("Error");
     }

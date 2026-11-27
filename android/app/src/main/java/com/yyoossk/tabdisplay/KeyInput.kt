@@ -42,6 +42,41 @@ object KeyMap {
         KeyEvent.KEYCODE_ALT_RIGHT -> 0xA5
         KeyEvent.KEYCODE_META_LEFT -> 0x5B
         KeyEvent.KEYCODE_META_RIGHT -> 0x5C
+        // 日本語キーボードのキー
+        KeyEvent.KEYCODE_ZENKAKU_HANKAKU -> 0x19   // 半角/全角 → 日本語入力のオン／オフ
+        KeyEvent.KEYCODE_EISU -> 0xF0              // 英数
+        KeyEvent.KEYCODE_MUHENKAN -> 0x1D          // 無変換
+        KeyEvent.KEYCODE_HENKAN -> 0x1C            // 変換
+        KeyEvent.KEYCODE_KATAKANA_HIRAGANA -> 0xF2 // カタカナ/ひらがな
+        KeyEvent.KEYCODE_CAPS_LOCK -> 0x14
+        else -> null
+    }
+
+    /**
+     * 「キーで送る」モード（ゲーム向け）で、記号のキーも仮想キーコードで送る。
+     * PC のキー配列で決まる文字になる（タブレットと PC のキーボードの配列が同じなら、そのとおりの文字）。
+     */
+    fun toVkAll(code: Int): Int? = toVk(code) ?: when (code) {
+        KeyEvent.KEYCODE_MINUS -> 0xBD
+        KeyEvent.KEYCODE_EQUALS -> 0xBB
+        KeyEvent.KEYCODE_LEFT_BRACKET -> 0xDB
+        KeyEvent.KEYCODE_RIGHT_BRACKET -> 0xDD
+        KeyEvent.KEYCODE_BACKSLASH -> 0xDC
+        KeyEvent.KEYCODE_SEMICOLON -> 0xBA
+        KeyEvent.KEYCODE_APOSTROPHE -> 0xDE
+        KeyEvent.KEYCODE_GRAVE -> 0xC0
+        KeyEvent.KEYCODE_COMMA -> 0xBC
+        KeyEvent.KEYCODE_PERIOD -> 0xBE
+        KeyEvent.KEYCODE_SLASH -> 0xBF
+        KeyEvent.KEYCODE_AT -> 0xC0
+        KeyEvent.KEYCODE_YEN -> 0xDC
+        KeyEvent.KEYCODE_RO -> 0xE2
+        in KeyEvent.KEYCODE_NUMPAD_0..KeyEvent.KEYCODE_NUMPAD_9 -> 0x60 + (code - KeyEvent.KEYCODE_NUMPAD_0)
+        KeyEvent.KEYCODE_NUMPAD_MULTIPLY -> 0x6A
+        KeyEvent.KEYCODE_NUMPAD_ADD -> 0x6B
+        KeyEvent.KEYCODE_NUMPAD_SUBTRACT -> 0x6D
+        KeyEvent.KEYCODE_NUMPAD_DOT -> 0x6E
+        KeyEvent.KEYCODE_NUMPAD_DIVIDE -> 0x6F
         else -> null
     }
 

@@ -17,6 +17,8 @@ data class Target(
     val usb: Boolean = false,
     /** PC の証明書の指紋（SHA-256）。暗号化した通信の相手が本物か確かめる */
     val fp: String = "",
+    /** PIN（USB の「接続する」のときだけ PC が渡す） */
+    val pin: String = "",
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("name", name)
@@ -77,7 +79,8 @@ data class Target(
             val port = i.getIntExtra("port", Protocol.PORT)
             val name = i.getStringExtra("name") ?: "PC"
             val fp = i.getStringExtra("fp") ?: ""
-            return Target(name, listOf(host), port, token, usb = host == "127.0.0.1", fp = fp)
+            val pin = i.getStringExtra("pin") ?: ""
+            return Target(name, listOf(host), port, token, usb = host == "127.0.0.1", fp = fp, pin = pin)
         }
     }
 }
@@ -173,6 +176,30 @@ class Prefs(ctx: Context) {
     var nativeTouch: Boolean
         get() = sp.getBoolean("ntouch", false)
         set(v) = sp.edit().putBoolean("ntouch", v).apply()
+
+    /** 画面の向き：0 = 自動、1 = 横に固定、2 = 縦に固定 */
+    var orientation: Int
+        get() = sp.getInt("orient", 0)
+        set(v) = sp.edit().putInt("orient", v).apply()
+
+    /** ほかのアプリを開いたら小窓（ピクチャー・イン・ピクチャー）で出し続ける */
+    var pip: Boolean
+        get() = sp.getBoolean("pip", true)
+        set(v) = sp.edit().putBoolean("pip", v).apply()
+
+    /** つないだキーボードのキーを「キーで送る」（ゲーム向け）。オフなら文字で送る（配列に左右されない） */
+    var keyMode: Boolean
+        get() = sp.getBoolean("keymode", false)
+        set(v) = sp.edit().putBoolean("keymode", v).apply()
+
+    /** 定型文（1 行に 1 つ） */
+    var snippets: List<String>
+        get() = (sp.getString("snippets", "") ?: "").split('\n').map { it.trim() }.filter { it.isNotEmpty() }
+        set(v) = sp.edit().putString("snippets", v.joinToString("\n")).apply()
+
+    /** PC ごとの PIN（合言葉で見分ける） */
+    fun pinFor(token: String): String = sp.getString("pin_$token", "") ?: ""
+    fun setPin(token: String, pin: String) = sp.edit().putString("pin_$token", pin).apply()
 
     /** タッチパッドモード */
     var touchpad: Boolean

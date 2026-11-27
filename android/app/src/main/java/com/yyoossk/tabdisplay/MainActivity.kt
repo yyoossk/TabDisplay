@@ -14,6 +14,7 @@ import android.widget.CheckBox
 import android.widget.LinearLayout
 import android.widget.RadioButton
 import android.widget.RadioGroup
+import android.widget.EditText
 import android.widget.ScrollView
 import android.widget.SeekBar
 import android.widget.TextView
@@ -151,6 +152,29 @@ class MainActivity : Activity() {
             isChecked = prefs.split
             setOnCheckedChangeListener { _, b -> prefs.split = b }
         })
+        // 画面の向き
+        col.addView(body(getString(R.string.opt_orient)))
+        val og = RadioGroup(this).apply { orientation = RadioGroup.HORIZONTAL }
+        listOf(0 to R.string.orient_auto, 1 to R.string.orient_land, 2 to R.string.orient_port).forEach { (v, label) ->
+            og.addView(RadioButton(this).apply {
+                id = View.generateViewId()
+                setText(label)
+                isChecked = prefs.orientation == v
+                setOnCheckedChangeListener { _, b -> if (b) prefs.orientation = v }
+            })
+        }
+        col.addView(og)
+        col.addView(CheckBox(this).apply {
+            setText(R.string.opt_pip)
+            isChecked = prefs.pip
+            isEnabled = android.os.Build.VERSION.SDK_INT >= 26
+            setOnCheckedChangeListener { _, b -> prefs.pip = b }
+        })
+        col.addView(CheckBox(this).apply {
+            setText(R.string.opt_keymode)
+            isChecked = prefs.keyMode
+            setOnCheckedChangeListener { _, b -> prefs.keyMode = b }
+        })
         col.addView(CheckBox(this).apply {
             setText(R.string.opt_mini)
             isChecked = prefs.mini
@@ -230,6 +254,22 @@ class MainActivity : Activity() {
             setOnClickListener { shareLog() }
         })
         col.addView(tools)
+
+        // 定型文
+        col.addView(title(R.string.snippets_title))
+        col.addView(body(getString(R.string.snippets_help)))
+        col.addView(EditText(this).apply {
+            setText(prefs.snippets.joinToString("\n"))
+            minLines = 3
+            gravity = Gravity.TOP or Gravity.START
+            addTextChangedListener(object : android.text.TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun afterTextChanged(e: android.text.Editable?) {
+                    prefs.snippets = (e?.toString() ?: "").split('\n')
+                }
+            })
+        })
 
         col.addView(title(R.string.notes_title))
         col.addView(body(getString(R.string.notes)).apply { alpha = 0.75f })
