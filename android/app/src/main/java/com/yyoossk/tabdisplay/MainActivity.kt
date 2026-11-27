@@ -91,6 +91,7 @@ class MainActivity : Activity() {
         })
 
         col.addView(body(getString(R.string.gestures)))
+        col.addView(body(getString(R.string.buttons_help)))
 
         col.addView(title(R.string.recent_title))
         recentBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }

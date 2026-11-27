@@ -26,6 +26,10 @@ public sealed class MainForm : Form
     private ComboBox _sideBox = null!;
     private CheckBox _rotateBox = null!;
     private CheckBox _audioBox = null!;
+    private ComboBox _fpsBox = null!, _brBox = null!, _qualityBox = null!, _profileBox = null!;
+    private CheckBox _dpiBox = null!, _adaptiveBox = null!, _skipBox = null!;
+    private TextBox _appsBox = null!;
+    private const int HotkeyId = 1;
 
     public MainForm(AppSettings settings, bool startHidden)
     {
@@ -135,7 +139,7 @@ public sealed class MainForm : Form
 
         // 表示のしかた
         var mode = _modeBox = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 260 };
-        mode.Items.AddRange(new object[] { L.T("mode_extend"), L.T("mode_duplicate"), L.T("mode_tablet"), L.T("mode_pc") });
+        mode.Items.AddRange(new object[] { L.T("mode_extend"), L.T("mode_duplicate"), L.T("mode_tablet"), L.T("mode_pc"), L.T("mode_region") });
         mode.SelectedIndex = (int)_s.Mode;
         mode.SelectedIndexChanged += (_, _) =>
         {
@@ -144,6 +148,31 @@ public sealed class MainForm : Form
             _server.ApplySettings();
         };
         Row(Lbl("lbl_mode"), mode);
+
+        // 一部だけ映す：ウィンドウか範囲を選ぶ
+        var pickRegion = new Button { Text = L.T("btn_region"), AutoSize = true };
+        pickRegion.Click += (_, _) =>
+        {
+            using var f = new RegionPicker(_s);
+            if (f.ShowDialog(this) == DialogResult.OK)
+            {
+                if (_modeBox.SelectedIndex != (int)ShowMode.Region) _modeBox.SelectedIndex = (int)ShowMode.Region;
+                else _server.ApplySettings();
+            }
+        };
+        Row(new Label(), pickRegion);
+
+        // 画質の方針
+        var quality = _qualityBox = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 260 };
+        quality.Items.AddRange(new object[] { L.T("q_auto"), L.T("q_text"), L.T("q_motion") });
+        quality.SelectedIndex = (int)_s.Quality;
+        quality.SelectedIndexChanged += (_, _) =>
+        {
+            _s.Quality = (QualityMode)quality.SelectedIndex;
+            _s.Save();
+            _server.ApplySettings();
+        };
+        Row(Lbl("lbl_quality"), quality);
 
         var side = _sideBox = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 260 };
         side.Items.AddRange(new object[] { L.T("side_right"), L.T("side_left"), L.T("side_top"), L.T("side_bottom") });
@@ -165,7 +194,7 @@ public sealed class MainForm : Form
         };
         Row(rotate);
 
-        var fps = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 100 };
+        var fps = _fpsBox = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 100 };
         fps.Items.AddRange(new object[] { "30", "60" });
         fps.SelectedItem = _s.Fps.ToString();
         if (fps.SelectedIndex < 0) fps.SelectedIndex = 1;
@@ -177,7 +206,7 @@ public sealed class MainForm : Form
         };
         Row(Lbl("lbl_fps"), fps);
 
-        var br = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 100 };
+        var br = _brBox = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 100 };
         br.Items.AddRange(new object[] { "4", "8", "12", "20", "30", "50" });
         br.SelectedItem = _s.BitrateMbps.ToString();
         if (br.SelectedIndex < 0) br.SelectedIndex = 2;
@@ -216,20 +245,71 @@ public sealed class MainForm : Form
         var audio = _audioBox = new CheckBox { Text = L.T("chk_audio"), AutoSize = true, Checked = _s.AudioToTablet };
         audio.CheckedChanged += (_, _) => { _s.AudioToTablet = audio.Checked; _s.Save(); _server.ApplySettings(); };
         Row(audio);
-        var dpi = new CheckBox { Text = L.T("chk_dpi"), AutoSize = true, Checked = _s.AutoDpi };
+        var dpi = _dpiBox = new CheckBox { Text = L.T("chk_dpi"), AutoSize = true, Checked = _s.AutoDpi };
         dpi.CheckedChanged += (_, _) => { _s.AutoDpi = dpi.Checked; _s.Save(); _server.ApplySettings(); };
         Row(dpi);
-        var adaptive = new CheckBox { Text = L.T("chk_adaptive"), AutoSize = true, Checked = _s.AdaptiveBitrate };
+        var adaptive = _adaptiveBox = new CheckBox { Text = L.T("chk_adaptive"), AutoSize = true, Checked = _s.AdaptiveBitrate };
         adaptive.CheckedChanged += (_, _) => { _s.AdaptiveBitrate = adaptive.Checked; _s.Save(); };
         Row(adaptive);
 
-        var skip = new CheckBox { Text = L.T("chk_skip"), AutoSize = true, Checked = _s.SkipStatic };
+        var skip = _skipBox = new CheckBox { Text = L.T("chk_skip"), AutoSize = true, Checked = _s.SkipStatic };
         skip.CheckedChanged += (_, _) => { _s.SkipStatic = skip.Checked; _s.Save(); _server.ApplySettings(); };
         Row(skip);
 
         var autoUsb = new CheckBox { Text = L.T("chk_autousb"), AutoSize = true, Checked = _s.AutoConnectUsb };
         autoUsb.CheckedChanged += (_, _) => { _s.AutoConnectUsb = autoUsb.Checked; _s.Save(); };
         Row(autoUsb);
+
+        // つないだら開くソフト
+        Row(new Label { Text = L.T("lbl_apps"), AutoSize = true, Margin = new Padding(3, 10, 3, 3) });
+        var apps = _appsBox = new TextBox { Multiline = true, Width = 520, Height = 60, ScrollBars = ScrollBars.Vertical,
+            Text = string.Join(Environment.NewLine, _s.LaunchApps) };
+        apps.Leave += (_, _) => SaveApps();
+        Row(apps);
+        var browse = new Button { Text = L.T("btn_browse"), AutoSize = true };
+        browse.Click += (_, _) =>
+        {
+            using var d = new OpenFileDialog { Filter = "*.exe;*.lnk|*.exe;*.lnk|*.*|*.*" };
+            if (d.ShowDialog(this) != DialogResult.OK) return;
+            var line = d.FileName.Contains(' ') ? $"\"{d.FileName}\"" : d.FileName;
+            apps.Text = apps.Text.TrimEnd() + (apps.Text.Trim().Length > 0 ? Environment.NewLine : "") + line;
+            SaveApps();
+        };
+        Row(browse);
+
+        // 設定の組み合わせ
+        var prof = _profileBox = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 200 };
+        RefreshProfiles();
+        prof.SelectedIndexChanged += (_, _) =>
+        {
+            if (prof.SelectedIndex < 0 || prof.SelectedIndex >= _s.Profiles.Count) return;
+            ApplyProfile(_s.Profiles[prof.SelectedIndex]);
+        };
+        var saveProf = new Button { Text = L.T("btn_profile_save"), AutoSize = true };
+        saveProf.Click += (_, _) =>
+        {
+            var name = TextPrompt.Ask(this, L.T("lbl_profile"), L.T("profile_name"),
+                prof.SelectedIndex >= 0 ? _s.Profiles[prof.SelectedIndex].Name : "");
+            if (name == null) return;
+            SaveApps();
+            _s.Profiles.RemoveAll(x => x.Name == name);
+            _s.Profiles.Add(Profile.From(_s, name));
+            _s.Save();
+            RefreshProfiles();
+        };
+        var delProf = new Button { Text = L.T("btn_profile_delete"), AutoSize = true };
+        delProf.Click += (_, _) =>
+        {
+            if (prof.SelectedIndex < 0) return;
+            _s.Profiles.RemoveAt(prof.SelectedIndex);
+            _s.Save();
+            RefreshProfiles();
+        };
+        var profRow = new FlowLayoutPanel { AutoSize = true, WrapContents = false };
+        profRow.Controls.AddRange(new Control[] { prof, saveProf, delProf });
+        Row(Lbl("lbl_profile"), profRow);
+
+        Row(new Label { Text = L.T("hotkey_help"), AutoSize = true, ForeColor = Color.DimGray, MaximumSize = new Size(540, 0) });
 
         Row(_driver);
         var tools = new FlowLayoutPanel { AutoSize = true, WrapContents = true, MaximumSize = new Size(540, 0) };
@@ -246,6 +326,57 @@ public sealed class MainForm : Form
         var notesTitle = new Label { Text = L.T("notes_title"), AutoSize = true, Font = new Font(Font, FontStyle.Bold), Margin = new Padding(3, 12, 3, 3) };
         Row(notesTitle);
         Row(new Label { Text = L.T("notes"), AutoSize = true, MaximumSize = new Size(540, 0), ForeColor = Color.DimGray });
+    }
+
+    private void SaveApps()
+    {
+        _s.LaunchApps = _appsBox.Lines.Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
+        _s.Save();
+    }
+
+    private void RefreshProfiles()
+    {
+        _profileBox.Items.Clear();
+        foreach (var p in _s.Profiles) _profileBox.Items.Add(p.Name);
+    }
+
+    /// <summary>保存した組み合わせを、画面の部品ごと切り替える（部品の変更で設定も保存・反映される）</summary>
+    private void ApplyProfile(Profile p)
+    {
+        p.ApplyTo(_s);
+        _s.Save();
+        _modeBox.SelectedIndex = (int)_s.Mode;
+        _sideBox.SelectedIndex = (int)_s.Side;
+        _rotateBox.Checked = _s.FollowRotation;
+        _fpsBox.SelectedItem = _s.Fps.ToString();
+        _brBox.SelectedItem = _s.BitrateMbps.ToString();
+        _audioBox.Checked = _s.AudioToTablet;
+        _dpiBox.Checked = _s.AutoDpi;
+        _adaptiveBox.Checked = _s.AdaptiveBitrate;
+        _skipBox.Checked = _s.SkipStatic;
+        _qualityBox.SelectedIndex = (int)_s.Quality;
+        _appsBox.Text = string.Join(Environment.NewLine, _s.LaunchApps);
+        _server.ApplySettings();
+        _status.Text = string.Format(L.T("profile_applied"), p.Name);
+    }
+
+    // ---------- ショートカットキー（Ctrl+Alt+T：今のウィンドウを次の画面へ） ----------
+
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        if (!Win.RegisterHotKey(Handle, HotkeyId, Win.MOD_CONTROL | Win.MOD_ALT | Win.MOD_NOREPEAT, (uint)Keys.T))
+            Log.Write("hotkey Ctrl+Alt+T is in use");
+    }
+
+    protected override void WndProc(ref Message m)
+    {
+        if (m.Msg == Win.WM_HOTKEY && m.WParam.ToInt32() == HotkeyId)
+        {
+            try { Win.MoveForegroundToNext(); } catch (Exception ex) { Log.Write("move window: " + ex.Message); }
+            return;
+        }
+        base.WndProc(ref m);
     }
 
     private static Label Lbl(string key) => new() { Text = L.T(key), AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(3, 8, 3, 3) };
@@ -382,7 +513,7 @@ public sealed class MainForm : Form
         m.Items.Add(new ToolStripSeparator());
 
         var modeMenu = new ToolStripMenuItem(L.T("tray_mode"));
-        string[] modeKeys = { "mode_extend", "mode_duplicate", "mode_tablet", "mode_pc" };
+        string[] modeKeys = { "mode_extend", "mode_duplicate", "mode_tablet", "mode_pc", "mode_region" };
         for (int i = 0; i < modeKeys.Length; i++)
         {
             int idx = i;
@@ -398,6 +529,9 @@ public sealed class MainForm : Form
             sideMenu.DropDownItems.Add(new ToolStripMenuItem(L.T(sideKeys[i]), null, (_, _) => _sideBox.SelectedIndex = idx));
         }
         m.Items.Add(sideMenu);
+
+        var profMenu = new ToolStripMenuItem(L.T("lbl_profile"));
+        m.Items.Add(profMenu);
 
         var rotate = new ToolStripMenuItem(L.T("chk_rotate"), null, (_, _) => _rotateBox.Checked = !_rotateBox.Checked);
         var audio = new ToolStripMenuItem(L.T("chk_audio"), null, (_, _) => _audioBox.Checked = !_audioBox.Checked);
@@ -416,6 +550,10 @@ public sealed class MainForm : Form
                 ((ToolStripMenuItem)sideMenu.DropDownItems[i]).Checked = (int)_s.Side == i;
             rotate.Checked = _s.FollowRotation;
             audio.Checked = _s.AudioToTablet;
+            profMenu.DropDownItems.Clear();
+            foreach (var p in _s.Profiles.ToList())
+                profMenu.DropDownItems.Add(new ToolStripMenuItem(p.Name, null, (_, _) => ApplyProfile(p)));
+            profMenu.Enabled = _s.Profiles.Count > 0;
         };
     }
 

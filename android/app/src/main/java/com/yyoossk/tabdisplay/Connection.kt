@@ -39,6 +39,8 @@ class Connection(
         fun onAudioConfig(rate: Int, channels: Int)
         fun onAudio(data: ByteArray)
         fun deviceId(): String
+        fun inputOnly(): Boolean
+        fun onArea(w: Int, h: Int)
     }
 
     @Volatile private var closed = false
@@ -188,6 +190,10 @@ class Connection(
                     listener.onAudioConfig(j.optInt("rate", 48000), j.optInt("ch", 2))
                 }
                 Protocol.P_AUDIO -> listener.onAudio(m.data)
+                Protocol.P_AREA -> {
+                    val j = JSONObject(String(m.data, Charsets.UTF_8))
+                    listener.onArea(j.optInt("w", 16), j.optInt("h", 9))
+                }
                 Protocol.P_ERROR -> {
                     val j = JSONObject(String(m.data, Charsets.UTF_8))
                     listener.onError(j.optString("e"))
@@ -205,6 +211,7 @@ class Connection(
         val j = JSONObject()
         j.put("token", target.token)
         j.put("id", listener.deviceId())
+        j.put("inputOnly", listener.inputOnly())
         j.put("name", (Build.MANUFACTURER + " " + Build.MODEL).trim())
         j.put("w", w)
         j.put("h", h)

@@ -15,9 +15,9 @@ public static class Protocol
     public const int Version = 1;
 
     // タブレット → PC
-    public const byte T_HELLO = 1, T_INPUT = 2, T_SIZE = 3, T_PING = 4, T_IDR = 5, T_STATS = 6, T_BYE = 7;
+    public const byte T_HELLO = 1, T_INPUT = 2, T_SIZE = 3, T_PING = 4, T_IDR = 5, T_STATS = 6, T_BYE = 7, T_OPTS = 8;
     // PC → タブレット
-    public const byte P_CONFIG = 10, P_VIDEO = 11, P_PONG = 12, P_STATUS = 13, P_ERROR = 14, P_AUDIO_CFG = 15, P_AUDIO = 16;
+    public const byte P_CONFIG = 10, P_VIDEO = 11, P_PONG = 12, P_STATUS = 13, P_ERROR = 14, P_AUDIO_CFG = 15, P_AUDIO = 16, P_AREA = 17;
 
     public const byte F_KEY = 1, F_CONFIG = 2;
     public const int MaxLen = 1 * 1024 * 1024; // タブレットから来るのは小さい JSON だけ

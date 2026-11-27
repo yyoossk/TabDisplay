@@ -197,9 +197,15 @@ public sealed class Server : IDisposable
 
     private void LayoutAll()
     {
-        var list = Snapshot().Where(s => !s.Closed).ToList();
-        foreach (var s in list) s.StopCapture();
+        var everyone = Snapshot().Where(s => !s.Closed).ToList();
+        foreach (var s in everyone) s.StopCapture();
         var mode = _settings.Mode;
+
+        // 入力専用（ペンタブレットとして使う）タブレットには映さず、PC の主画面に入力を当てる
+        var primaryForInput = Displays.Primary();
+        foreach (var s in everyone.Where(x => x.InputOnly))
+            if (primaryForInput != null) s.SetInputOnly(primaryForInput);
+        var list = everyone.Where(x => !x.InputOnly).ToList();
 
         if (_lastMode == ShowMode.TabletOnly && (mode != ShowMode.TabletOnly || list.Count == 0))
             Displays.RestoreIfNeeded();
@@ -234,6 +240,11 @@ public sealed class Server : IDisposable
                 }
                 return;
             }
+
+            case ShowMode.Region:
+                VirtualDisplay.Disable();
+                foreach (var s in list) StartRegion(s);
+                return;
 
             default: // 広げる・タブレットのみ
             {
@@ -270,6 +281,14 @@ public sealed class Server : IDisposable
                 displays = VirtualDisplay.Refetch(names) ?? displays;
                 for (int i = 0; i < list.Count; i++)
                     list[i].StartCapture(displays[i], Even(displays[i].Width), Even(displays[i].Height));
+                // つないだら開くソフト（そのタブレットの画面で、最大化して開く）
+                foreach (var s in list.Where(x => !x.AppsLaunched && x.VirtualName != null))
+                {
+                    s.AppsLaunched = true;
+                    var name = s.VirtualName!;
+                    foreach (var app in _settings.LaunchApps.Where(a => a.Trim().Length > 0))
+                        Task.Run(() => Win.LaunchOn(app, name));
+                }
                 return;
             }
         }
@@ -278,9 +297,12 @@ public sealed class Server : IDisposable
     /// <summary>1 台だけ直す（回したとき・画質の自動調整）。ほかのタブレットは止めない</summary>
     private void LayoutOne(Session s)
     {
-        if (s.Closed) return;
+        if (s.Closed || s.InputOnly) return;
         switch (_settings.Mode)
         {
+            case ShowMode.Region:
+                StartRegion(s);
+                return;
             case ShowMode.Duplicate:
             {
                 var p = Displays.Primary();
@@ -307,6 +329,61 @@ public sealed class Server : IDisposable
         }
     }
 
+    // ---------- 一部だけ映す ----------
+
+    private IntPtr _regionHwnd;
+    private Rectangle? _lastRegion;
+
+    /// <summary>映す範囲（ウィンドウなら今の位置）と、それがある画面</summary>
+    private (DisplayInfo monitor, Rectangle rect)? ResolveRegion()
+    {
+        Rectangle? r = null;
+        var title = _settings.RegionWindowTitle;
+        if (!string.IsNullOrEmpty(title))
+        {
+            if (_regionHwnd == IntPtr.Zero || !Win.IsWindow(_regionHwnd) || Win.Title(_regionHwnd) != title)
+            {
+                var all = Win.List();
+                _regionHwnd = (all.FirstOrDefault(w => w.Title == title) ?? all.FirstOrDefault(w => w.Title.Contains(title)))?.Handle ?? IntPtr.Zero;
+            }
+            if (_regionHwnd != IntPtr.Zero) r = Win.Bounds(_regionHwnd);
+        }
+        else if (_settings.RegionRect.Length == 4)
+        {
+            var a = _settings.RegionRect;
+            r = new Rectangle(a[0], a[1], a[2], a[3]);
+        }
+        if (r == null) return null;
+        var rect = r.Value;
+        var center = new Point(rect.X + rect.Width / 2, rect.Y + rect.Height / 2);
+        var mons = Displays.Attached();
+        var mon = mons.FirstOrDefault(m => new Rectangle(m.X, m.Y, m.Width, m.Height).Contains(center)) ?? mons.FirstOrDefault();
+        if (mon == null) return null;
+        // 画面からはみ出す分は切る。大きさは偶数・64 以上
+        rect.Intersect(new Rectangle(mon.X, mon.Y, mon.Width, mon.Height));
+        if (rect.Width < 64 || rect.Height < 64) return null;
+        rect.Width &= ~1;
+        rect.Height &= ~1;
+        return (mon, rect);
+    }
+
+    private void StartRegion(Session s)
+    {
+        var reg = ResolveRegion();
+        _lastRegion = reg?.rect;
+        if (reg == null)
+        {
+            s.SetOff("no_region");
+            RaiseStatus("st_no_region");
+            return;
+        }
+        var (mon, rect) = reg.Value;
+        // 入力の当て先は、映している範囲そのもの
+        var target = mon with { X = rect.X, Y = rect.Y, Width = rect.Width, Height = rect.Height };
+        var (w, h) = FitInto(rect.Width, rect.Height, s.TabW, s.TabH);
+        s.StartCapture(target, w, h, rect.X - mon.X, rect.Y - mon.Y, region: true);
+    }
+
     internal static int Even(int v) => Math.Max(2, v & ~1);
 
     /// <summary>(sw, sh) を (bw, bh) の箱（向きは画面に合わせる）に入るように縮める</summary>
@@ -325,6 +402,16 @@ public sealed class Server : IDisposable
         {
             Thread.Sleep(1000);
             var list = Snapshot();
+            // 一部だけ映す（ウィンドウ）：ウィンドウが動いたり大きさが変わったら映し直す
+            if (_settings.Mode == ShowMode.Region && !string.IsNullOrEmpty(_settings.RegionWindowTitle) && list.Count > 0)
+            {
+                try
+                {
+                    var now = ResolveRegion()?.rect;
+                    if (now != _lastRegion) RequestLayout(null);
+                }
+                catch { }
+            }
             var sb = new StringBuilder();
             foreach (var s in list)
             {
@@ -377,6 +464,14 @@ internal sealed class Session
     /// <summary>このタブレット用の仮想ディスプレイの名前（広げる・タブレットのみのとき）</summary>
     public volatile string? VirtualName;
     public bool Closed => _closed;
+    /// <summary>入力専用（映像なし・ペンタブレットとして使う）</summary>
+    public volatile bool InputOnly;
+    /// <summary>つないだら開くソフトをもう開いたか</summary>
+    public bool AppsLaunched;
+    // 画質の方針（自動のとき）
+    private volatile bool _autoText;
+    private int _lowFpsTicks, _highFpsTicks;
+    private long _lastProfileChange;
 
     // 映像
     private volatile Capture? _capture;
@@ -405,6 +500,7 @@ internal sealed class Session
         TabW = Server.Even((int?)hello["w"] ?? 1920);
         TabH = Server.Even((int?)hello["h"] ?? 1080);
         Dpi = (int?)hello["dpi"] ?? 160;
+        InputOnly = (bool?)hello["inputOnly"] ?? false;
         CurrentMbps = _settings.BitrateMbps;
         _lastRateChange = Environment.TickCount64;
         Log.Write($"tablet {TabletName} {TabW}x{TabH} dpi {Dpi} from {client.Client.RemoteEndPoint}");
@@ -469,11 +565,39 @@ internal sealed class Session
                     Rtt = (int?)j["rtt"] ?? 0;
                     break;
                 }
+                case Protocol.T_OPTS:
+                {
+                    var j = Protocol.Json(data);
+                    var io = (bool?)j["inputOnly"] ?? false;
+                    if (io != InputOnly)
+                    {
+                        InputOnly = io;
+                        _server.RequestLayout(null); // 仮想ディスプレイの枚数が変わる
+                    }
+                    break;
+                }
                 case Protocol.T_BYE:
                     return;
             }
         }
     }
+
+    /// <summary>入力専用：映像は送らず、タブレットの面を PC の画面 target に当てる</summary>
+    public void SetInputOnly(DisplayInfo target)
+    {
+        StopCapture();
+        _target = target;
+        Send(Protocol.Pack(Protocol.P_AREA, new JsonObject { ["w"] = target.Width, ["h"] = target.Height }));
+        SendStatus("input_only");
+    }
+
+    /// <summary>文字をくっきりにするか（画質の方針）</summary>
+    private bool TextQualityNow => _settings.Quality switch
+    {
+        QualityMode.Text => true,
+        QualityMode.Motion => false,
+        _ => _autoText,
+    };
 
     // ---------- 映像 ----------
 
@@ -487,7 +611,7 @@ internal sealed class Session
     /// <summary>
     /// 撮り始める。前のものが動いていれば、新しいほうが絵を出せるようになってから止める（切り替えの止まりを短く）。
     /// </summary>
-    public void StartCapture(DisplayInfo target, int outW, int outH)
+    public void StartCapture(DisplayInfo target, int outW, int outH, int offX = 0, int offY = 0, bool region = false)
     {
         if (_closed) return;
         lock (_capLock)
@@ -496,7 +620,8 @@ internal sealed class Session
             _target = target;
             SendStatus("ok");
             var spec = new CaptureSpec(target.DeviceName, target.Width, target.Height, outW, outH,
-                _settings.Fps, Math.Clamp(CurrentMbps, 1, _settings.BitrateMbps), _settings.SkipStatic);
+                _settings.Fps, Math.Clamp(CurrentMbps, 1, _settings.BitrateMbps), _settings.SkipStatic,
+                offX, offY, region, TextQualityNow);
             var cap = new Capture(spec, _settings);
             cap.Config += (w, h, sps, pps) =>
             {
@@ -590,13 +715,32 @@ internal sealed class Session
     /// </summary>
     public void AdaptTick()
     {
-        if (!_settings.AdaptiveBitrate || _capture == null || _closed)
-        {
-            if (!_settings.AdaptiveBitrate) CurrentMbps = _settings.BitrateMbps;
-            return;
-        }
+        if (_capture == null || _closed) return;
+        if (!_settings.AdaptiveBitrate) CurrentMbps = _settings.BitrateMbps;
         var now = Environment.TickCount64;
+
+        // 画質の方針「自動」：絵がほとんど変わらない（1 秒 15 枚未満が 3 秒）→ 文字をくっきり、
+        // よく動く（1 秒 30 枚より多いのが 2 秒）→ 動きをなめらか。切り替えは 10 秒に 1 回まで
+        if (_settings.Quality == QualityMode.Auto && _settings.SkipStatic)
+        {
+            if (Fps < 15) { _lowFpsTicks++; _highFpsTicks = 0; }
+            else if (Fps > 30) { _highFpsTicks++; _lowFpsTicks = 0; }
+            else { _lowFpsTicks = 0; _highFpsTicks = 0; }
+            bool want = _autoText;
+            if (!_autoText && _lowFpsTicks >= 3) want = true;
+            if (_autoText && _highFpsTicks >= 2) want = false;
+            if (want != _autoText && now - _lastProfileChange > 10000)
+            {
+                _autoText = want;
+                _lastProfileChange = now;
+                Log.Write($"{TabletName}: quality -> {(want ? "text" : "motion")}");
+                _server.RequestLayout(this);
+                return;
+            }
+        }
+
         var drops = Interlocked.Exchange(ref _drops, 0);
+        if (!_settings.AdaptiveBitrate) return;
         bool trouble = drops > 0 || Lat > 120;
         if (trouble) _lastTrouble = now;
         if (now - _lastRateChange < 6000) return;

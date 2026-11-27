@@ -47,6 +47,19 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
     private lateinit var kbButton: TextView
     private lateinit var tpButton: TextView
     private lateinit var sideBar: LinearLayout
+    private lateinit var padView: View
+    private lateinit var strip: LinearLayout
+    private lateinit var gamepad: FrameLayout
+    private lateinit var ioButton: TextView
+    private lateinit var stripButton: TextView
+    private lateinit var padButton: TextView
+    private var areaW = 16
+    private var areaH = 9
+    /** 左端の「右」「中」を押している間は、タップがその ボタンのクリックになる */
+    @Volatile private var rHeld = false
+    @Volatile private var mHeld = false
+    /** いまさわっている面（映像か、入力専用の面） */
+    private var touchView: View? = null
     private lateinit var sideScroll: ScrollView
     private var lastTouch = SystemClock.elapsedRealtime()
     private var dimmed = false
@@ -92,6 +105,12 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
         video = SurfaceView(this)
         video.holder.addCallback(this)
         root.addView(video, FrameLayout.LayoutParams(1, 1, Gravity.CENTER))
+        // 入力専用（ペンタブレット）のときの面。PC の画面と同じ縦横比の灰色の板
+        padView = View(this).apply {
+            setBackgroundColor(0xFF37474F.toInt())
+            visibility = View.GONE
+        }
+        root.addView(padView, FrameLayout.LayoutParams(1, 1, Gravity.CENTER))
         message = TextView(this).apply {
             setTextColor(Color.WHITE)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
@@ -129,7 +148,16 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
             sideScroll.visibility = if (sideScroll.visibility == View.VISIBLE) View.GONE else View.VISIBLE
         }
         val buttons = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        for (b in listOf(menuButton, tpButton, kbButton)) {
+        ioButton = roundButton("✎") { toggleInputOnly() }
+        stripButton = roundButton("◧") {
+            prefs.buttonStrip = !prefs.buttonStrip
+            updateModeButtons()
+        }
+        padButton = roundButton("🎮") {
+            gamepad.visibility = if (gamepad.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+            updateModeButtons()
+        }
+        for (b in listOf(menuButton, padButton, stripButton, ioButton, tpButton, kbButton)) {
             buttons.addView(b, LinearLayout.LayoutParams(dp(44), dp(44)).apply { setMargins(0, dp(6), 0, 0) })
         }
         root.addView(buttons, FrameLayout.LayoutParams(
@@ -148,12 +176,16 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
             setMargins(0, 0, dp(60), 0)
         })
         buildShortcuts()
+        buildStrip()
+        buildGamepad()
         updateTouchpadButton()
+        updateModeButtons()
         setContentView(root)
         Discovery.start(this)
-        root.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> layoutVideo() }
+        root.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> layoutVideo(); layoutPad() }
 
-        setupTouch()
+        setupTouch(video)
+        setupTouch(padView)
         hideSystemUi()
 
         handleIntent(intent)
@@ -298,6 +330,160 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
         }
     }
 
+    // ---------- 入力専用（ペンタブレット） ----------
+
+    override fun inputOnly(): Boolean = prefs.inputOnly
+
+    override fun onArea(w: Int, h: Int) {
+        ui.post {
+            areaW = maxOf(1, w); areaH = maxOf(1, h)
+            layoutPad()
+        }
+    }
+
+    /** PC の画面と同じ縦横比で、タブレットいっぱいに置く */
+    private fun layoutPad() {
+        val rw = root.width
+        val rh = root.height
+        if (rw <= 0 || rh <= 0) return
+        val scale = minOf(rw.toFloat() / areaW, rh.toFloat() / areaH)
+        val lp = padView.layoutParams as FrameLayout.LayoutParams
+        val lw = (areaW * scale).toInt()
+        val lh = (areaH * scale).toInt()
+        if (lp.width != lw || lp.height != lh) {
+            lp.width = lw; lp.height = lh
+            padView.layoutParams = lp
+        }
+    }
+
+    private fun toggleInputOnly() {
+        prefs.inputOnly = !prefs.inputOnly
+        conn?.post(Protocol.T_OPTS, JSONObject().put("inputOnly", prefs.inputOnly))
+        if (!prefs.inputOnly) padView.visibility = View.GONE
+        Toast.makeText(this, if (prefs.inputOnly) R.string.input_only_on else R.string.input_only_off, Toast.LENGTH_LONG).show()
+        updateModeButtons()
+    }
+
+    private fun updateModeButtons() {
+        fun mark(b: TextView, on: Boolean) {
+            b.alpha = if (on) 1f else 0.6f
+            b.setBackgroundColor(if (on) 0xCC1E88E5.toInt() else 0x66000000)
+        }
+        mark(ioButton, prefs.inputOnly)
+        mark(stripButton, prefs.buttonStrip)
+        mark(padButton, gamepad.visibility == View.VISIBLE)
+        strip.visibility = if (prefs.buttonStrip) View.VISIBLE else View.GONE
+    }
+
+    // ---------- 左端の帯：押している間「右」「中」・スクロール ----------
+
+    private fun buildStrip() {
+        strip = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(0x55000000)
+        }
+        fun holdButton(label: String, set: (Boolean) -> Unit) = TextView(this).apply {
+            text = label
+            setTextColor(Color.WHITE)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+            gravity = Gravity.CENTER
+            setOnTouchListener { v, e ->
+                when (e.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> { set(true); v.setBackgroundColor(0xCC1E88E5.toInt()) }
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> { set(false); v.setBackgroundColor(0) }
+                }
+                true
+            }
+        }
+        strip.addView(holdButton(getString(R.string.strip_right)) { rHeld = it },
+            LinearLayout.LayoutParams(dp(56), dp(64)))
+        strip.addView(holdButton(getString(R.string.strip_middle)) { mHeld = it },
+            LinearLayout.LayoutParams(dp(56), dp(64)))
+        // スクロールの帯：上下になぞるとホイール
+        val scroll = TextView(this).apply {
+            text = "↕"
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            setBackgroundColor(0x33FFFFFF)
+            var lastY = 0f
+            var acc = 0f
+            setOnTouchListener { _, e ->
+                when (e.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> { lastY = e.y; acc = 0f }
+                    MotionEvent.ACTION_MOVE -> {
+                        acc += (e.y - lastY) / dp(20) * 120f
+                        lastY = e.y
+                        val wy = acc.toInt()
+                        if (wy != 0) {
+                            acc -= wy
+                            conn?.post(Protocol.T_INPUT, JSONObject().put("k", "scroll").put("wx", 0).put("wy", -wy))
+                        }
+                    }
+                }
+                true
+            }
+        }
+        strip.addView(scroll, LinearLayout.LayoutParams(dp(56), 0, 1f))
+        root.addView(strip, FrameLayout.LayoutParams(dp(56), FrameLayout.LayoutParams.MATCH_PARENT, Gravity.START))
+    }
+
+    // ---------- ゲームパッド（キーボードのキーとして送る） ----------
+
+    private fun buildGamepad() {
+        gamepad = FrameLayout(this).apply { visibility = View.GONE }
+        fun key(label: String, vk: Int) = TextView(this).apply {
+            text = label
+            setTextColor(Color.WHITE)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
+            gravity = Gravity.CENTER
+            setBackgroundColor(0x66000000)
+            alpha = 0.8f
+            setOnTouchListener { v, e ->
+                when (e.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        if (prefs.haptic) v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                        v.setBackgroundColor(0xCC1E88E5.toInt())
+                        conn?.post(Protocol.T_INPUT, JSONObject().put("k", "key").put("vk", vk).put("d", true))
+                    }
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        v.setBackgroundColor(0x66000000)
+                        conn?.post(Protocol.T_INPUT, JSONObject().put("k", "key").put("vk", vk).put("d", false))
+                    }
+                }
+                true
+            }
+        }
+        val s = dp(64)
+        fun place(v: View, gravity: Int, x: Int, y: Int, w: Int = s, h: Int = s) {
+            gamepad.addView(v, FrameLayout.LayoutParams(w, h, gravity).apply {
+                if (gravity and Gravity.END == Gravity.END) rightMargin = x else leftMargin = x
+                if (gravity and Gravity.BOTTOM == Gravity.BOTTOM) bottomMargin = y else topMargin = y
+            })
+        }
+        val bl = Gravity.BOTTOM or Gravity.START
+        val br = Gravity.BOTTOM or Gravity.END
+        // 十字キー（左下）
+        place(key("▲", 0x26), bl, dp(20) + s, dp(20) + s * 2)
+        place(key("◀", 0x25), bl, dp(20), dp(20) + s)
+        place(key("▶", 0x27), bl, dp(20) + s * 2, dp(20) + s)
+        place(key("▼", 0x28), bl, dp(20) + s, dp(20))
+        // A B X Y（右下。右のボタン列よりさらに内側）
+        val rx = dp(70)
+        place(key("Y", 0x41), br, rx + s * 2, dp(20) + s)
+        place(key("X", 0x53), br, rx + s, dp(20) + s * 2)
+        place(key("A", 0x58), br, rx, dp(20) + s)
+        place(key("B", 0x5A), br, rx + s, dp(20))
+        // L R（上の左右）
+        place(key("L", 0x51), Gravity.TOP or Gravity.START, dp(20), dp(20), s * 2, s)
+        place(key("R", 0x57), Gravity.TOP or Gravity.END, rx, dp(20), s * 2, s)
+        // SELECT START（下の真ん中）
+        place(key("SELECT", 0xA1), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL, 0, dp(20), s * 2, dp(40))
+        gamepad.addView(key("START", 0x0D), FrameLayout.LayoutParams(s * 2, dp(40), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
+            bottomMargin = dp(70)
+        })
+        root.addView(gamepad, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+    }
+
     // ---------- 接続 ----------
 
     override fun onConnecting(host: String) {
@@ -362,8 +548,18 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
         ui.post {
             when (s) {
                 "pc_only" -> { showMessage(getString(R.string.pc_only)); video.visibility = View.INVISIBLE }
+                "no_region" -> { showMessage(getString(R.string.no_region)); video.visibility = View.INVISIBLE }
+                "input_only" -> {
+                    hideMessage()
+                    video.visibility = View.INVISIBLE
+                    padView.visibility = View.VISIBLE
+                    layoutPad()
+                }
                 "no_driver" -> { showMessage(getString(R.string.no_driver)); video.visibility = View.INVISIBLE }
-                "ok" -> video.visibility = View.VISIBLE
+                "ok" -> {
+                    video.visibility = View.VISIBLE
+                    padView.visibility = View.GONE
+                }
             }
         }
     }
@@ -448,7 +644,7 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
                 dimmed = true
                 window.attributes = window.attributes.apply { screenBrightness = 0.05f }
             }
-            if (fps > 0) conn?.post(Protocol.T_STATS, JSONObject().put("fps", fps).put("lat", lat).put("rtt", rtt))
+            conn?.post(Protocol.T_STATS, JSONObject().put("fps", fps).put("lat", lat).put("rtt", rtt))
             ui.postDelayed(this, 1000)
         }
     }
@@ -458,7 +654,7 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
     // 2 本指：タップ → 右クリック / つまむ・広げる → 拡大縮小（Ctrl + ホイール）
     // ペン：筆圧つきのペン入力（Windows のペンとして）
 
-    private fun setupTouch() {
+    private fun setupTouch(target: View) {
         val slop = ViewConfiguration.get(this).scaledTouchSlop.toFloat()
         val longMs = ViewConfiguration.getLongPressTimeout().toLong()
         val notchPx = dp(40).toFloat()   // 40dp なぞるとホイール 1 目盛り
@@ -483,12 +679,13 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
 
         val longPress = Runnable {
             longFired = true
-            if (prefs.haptic) video.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+            if (prefs.haptic) target.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
             sendInput("rclick", downX, downY)
         }
 
-        video.setOnTouchListener { v, e ->
+        target.setOnTouchListener { v, e ->
             touched()
+            touchView = v
             if (prefs.touchpad && !isPen(e)) {
                 touchpad(v, e)
                 return@setOnTouchListener true
@@ -561,7 +758,7 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
                 MotionEvent.ACTION_POINTER_UP -> {
                     if (two) {
                         if (!twoMoved && SystemClock.elapsedRealtime() - twoStart < 350) {
-                            if (prefs.haptic) video.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                            if (prefs.haptic) target.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                             sendInput("rclick", twoMidX, twoMidY)
                         }
                         two = false
@@ -570,7 +767,10 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
                 }
                 MotionEvent.ACTION_UP -> {
                     ui.removeCallbacks(longPress)
-                    if (!dragging && !longFired && !two && !twoDone) sendInput("click", e.x, e.y)
+                    if (!dragging && !longFired && !two && !twoDone) {
+                        // 左端の「右」「中」を押していれば、そのボタンのクリックにする
+                        sendInput(if (rHeld) "rclick" else if (mHeld) "mclick" else "click", e.x, e.y)
+                    }
                 }
                 MotionEvent.ACTION_CANCEL -> ui.removeCallbacks(longPress)
             }
@@ -578,7 +778,7 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
         }
 
         // ペンを浮かせて動かしたとき（カーソルが付いてくる）
-        video.setOnGenericMotionListener { v, e ->
+        target.setOnGenericMotionListener { v, e ->
             if (!isPen(e)) return@setOnGenericMotionListener false
             when (e.actionMasked) {
                 MotionEvent.ACTION_HOVER_ENTER, MotionEvent.ACTION_HOVER_MOVE -> sendPen(v, e, "h")
@@ -730,8 +930,9 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
     }
 
     private fun sendInput(kind: String, x: Float, y: Float) {
-        val w = video.width.toFloat()
-        val h = video.height.toFloat()
+        val tv = touchView ?: video
+        val w = tv.width.toFloat()
+        val h = tv.height.toFloat()
         if (w <= 0 || h <= 0) return
         conn?.post(Protocol.T_INPUT, JSONObject()
             .put("k", kind)

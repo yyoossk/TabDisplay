@@ -14,6 +14,48 @@ public enum ShowMode
     TabletOnly = 2,
     /// <summary>PC のみ（タブレットには映さない）</summary>
     PcOnly = 3,
+    /// <summary>PC の画面の一部（ウィンドウ 1 つ・選んだ範囲）だけ映す</summary>
+    Region = 4,
+}
+
+/// <summary>画質の方針</summary>
+public enum QualityMode { Auto = 0, Text = 1, Motion = 2 }
+
+/// <summary>名前をつけて保存した設定の組み合わせ</summary>
+public class Profile
+{
+    public string Name { get; set; } = "";
+    public ShowMode Mode { get; set; }
+    public TabletSide Side { get; set; }
+    public bool FollowRotation { get; set; }
+    public int Fps { get; set; }
+    public int BitrateMbps { get; set; }
+    public bool AudioToTablet { get; set; }
+    public bool AutoDpi { get; set; }
+    public bool AdaptiveBitrate { get; set; }
+    public bool SkipStatic { get; set; }
+    public QualityMode Quality { get; set; }
+    public string RegionWindowTitle { get; set; } = "";
+    public int[] RegionRect { get; set; } = Array.Empty<int>();
+    public List<string> LaunchApps { get; set; } = new();
+
+    public static Profile From(AppSettings s, string name) => new()
+    {
+        Name = name, Mode = s.Mode, Side = s.Side, FollowRotation = s.FollowRotation, Fps = s.Fps,
+        BitrateMbps = s.BitrateMbps, AudioToTablet = s.AudioToTablet, AutoDpi = s.AutoDpi,
+        AdaptiveBitrate = s.AdaptiveBitrate, SkipStatic = s.SkipStatic, Quality = s.Quality,
+        RegionWindowTitle = s.RegionWindowTitle, RegionRect = s.RegionRect.ToArray(),
+        LaunchApps = s.LaunchApps.ToList(),
+    };
+
+    public void ApplyTo(AppSettings s)
+    {
+        s.Mode = Mode; s.Side = Side; s.FollowRotation = FollowRotation; s.Fps = Fps;
+        s.BitrateMbps = BitrateMbps; s.AudioToTablet = AudioToTablet; s.AutoDpi = AutoDpi;
+        s.AdaptiveBitrate = AdaptiveBitrate; s.SkipStatic = SkipStatic; s.Quality = Quality;
+        s.RegionWindowTitle = RegionWindowTitle; s.RegionRect = RegionRect.ToArray();
+        s.LaunchApps = LaunchApps.ToList();
+    }
 }
 
 /// <summary>タブレットを PC の画面のどちら側に置くか（広げるとき）</summary>
@@ -45,6 +87,16 @@ public class AppSettings
     public TabletSide Side { get; set; } = TabletSide.Right;
     /// <summary>省電力：画面に変化がないときは送らない</summary>
     public bool SkipStatic { get; set; } = true;
+    /// <summary>画質の方針（自動・文字をくっきり・動きをなめらか）</summary>
+    public QualityMode Quality { get; set; } = QualityMode.Auto;
+    /// <summary>「一部だけ映す」で映すウィンドウのタイトル（空なら RegionRect の範囲）</summary>
+    public string RegionWindowTitle { get; set; } = "";
+    /// <summary>「一部だけ映す」で映す範囲（デスクトップの座標 x, y, 幅, 高さ）</summary>
+    public int[] RegionRect { get; set; } = Array.Empty<int>();
+    /// <summary>タブレットをつないだら、タブレットの画面で開くソフト（1 つずつコマンド）</summary>
+    public List<string> LaunchApps { get; set; } = new();
+    /// <summary>名前をつけて保存した設定の組み合わせ</summary>
+    public List<Profile> Profiles { get; set; } = new();
     /// <summary>うまく動いた圧縮方式（次回はこれから試す）</summary>
     public string LastEncoder { get; set; } = "";
     /// <summary>Wi-Fi 接続の合言葉（QR に入れる）</summary>

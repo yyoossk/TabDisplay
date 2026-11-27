@@ -50,6 +50,10 @@ public static class Displays
         desc.Contains("Virtual Display Driver", StringComparison.OrdinalIgnoreCase) ||
         id.Contains("MttVDD", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>画面の名前（\\.\DISPLAY3 など）が仮想ディスプレイか</summary>
+    public static bool IsVirtualName(string deviceName) =>
+        FindVirtuals().Any(d => string.Equals(d.DeviceName, deviceName, StringComparison.OrdinalIgnoreCase));
+
     public static DisplayInfo? FindVirtual() => FindVirtuals().FirstOrDefault();
 
     public static List<DisplayInfo> FindVirtuals() =>

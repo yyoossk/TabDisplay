@@ -120,6 +120,16 @@ class Prefs(ctx: Context) {
         get() = sp.getBoolean("dim", true)
         set(v) = sp.edit().putBoolean("dim", v).apply()
 
+    /** 入力専用（ペンタブレット）モード：映像を出さず、タブレットの面を PC の画面に当てる */
+    var inputOnly: Boolean
+        get() = sp.getBoolean("inputOnly", false)
+        set(v) = sp.edit().putBoolean("inputOnly", v).apply()
+
+    /** 左端の「右クリック・中ボタン・スクロール」の帯 */
+    var buttonStrip: Boolean
+        get() = sp.getBoolean("strip", false)
+        set(v) = sp.edit().putBoolean("strip", v).apply()
+
     /** タッチパッドモード */
     var touchpad: Boolean
         get() = sp.getBoolean("touchpad", false)

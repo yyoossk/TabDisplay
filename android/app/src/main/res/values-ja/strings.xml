@@ -55,4 +55,10 @@
     <string name="touchpad_on">タッチパッドモード：なぞるとカーソルが動く／タップでクリック／2 本指タップで右クリック／2 本指でなぞるとスクロール／2 回タップしてなぞるとドラッグ</string>
     <string name="touchpad_off">タッチモード</string>
     <string name="err_tls">この PC を確認できませんでした。PC の QR コードをもう一度読み取ってください。</string>
+    <string name="strip_right">右</string>
+    <string name="strip_middle">中</string>
+    <string name="input_only_on">ペンタブレットモード：映像は出しません。タブレットの面が PC の主画面に当たります。</string>
+    <string name="input_only_off">映像を出すモードに戻しました</string>
+    <string name="no_region">PC で映すウィンドウが見つかりません。</string>
+    <string name="buttons_help">右下のボタン：☰ ショートカット ／ 🎮 ゲームパッド ／ ◧ 左端に「右」「中」ボタンとスクロールの帯（「右」「中」を押しながら画面をタップ）／ ✎ ペンタブレットモード（映像なし）／ 🖱 タッチパッドモード ／ ⌨ キーボード\nゲームパッドのボタンはキーとして送ります：十字＝矢印、A＝X、B＝Z、X＝S、Y＝A、L＝Q、R＝W、START＝Enter、SELECT＝右 Shift</string>
 </resources>

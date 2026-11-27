@@ -55,4 +55,10 @@
     <string name="touchpad_on">Touchpad mode: slide to move the pointer, tap to click, two-finger tap to right click, two-finger slide to scroll, double tap and slide to drag</string>
     <string name="touchpad_off">Touch mode</string>
     <string name="err_tls">Could not confirm this PC. Scan the QR code on the PC again.</string>
+    <string name="strip_right">Right</string>
+    <string name="strip_middle">Middle</string>
+    <string name="input_only_on">Pen tablet mode: the picture is not shown. This tablet\'s surface matches the PC\'s main screen.</string>
+    <string name="input_only_off">Showing the picture again</string>
+    <string name="no_region">The window to show was not found on the PC.</string>
+    <string name="buttons_help">Buttons at the bottom right: ☰ shortcuts / 🎮 gamepad / ◧ right, middle and scroll buttons on the left edge (hold Right or Middle and tap the screen) / ✎ pen tablet mode (no picture) / 🖱 touchpad mode / ⌨ keyboard\nGamepad buttons are sent as keys: arrows, A=X, B=Z, X=S, Y=A, L=Q, R=W, START=Enter, SELECT=right Shift</string>
 </resources>

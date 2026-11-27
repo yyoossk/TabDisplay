@@ -25,6 +25,7 @@ object Protocol {
     const val T_IDR = 5        // 中身なし：キーフレームがほしい
     const val T_STATS = 6      // JSON: fps, lat（PC の画面に出すため）
     const val T_BYE = 7
+    const val T_OPTS = 8       // JSON: inputOnly（映像なしの入力専用＝ペンタブレット）
 
     // PC → タブレット
     const val P_CONFIG = 10    // JSON: w, h, fps, sps, pps（base64）, name
@@ -34,6 +35,7 @@ object Protocol {
     const val P_ERROR = 14     // JSON: e（"token" / "version"）
     const val P_AUDIO_CFG = 15 // JSON: rate, ch
     const val P_AUDIO = 16     // PCM 16bit（リトルエンディアン、交互）
+    const val P_AREA = 17      // JSON: w, h（入力専用のとき、当てる PC の画面の大きさ）
 
     /** PC が Wi-Fi に出す「ここにいます」の知らせ（UDP ブロードキャスト） */
     const val DISCOVERY_PORT = 38501

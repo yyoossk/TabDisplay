@@ -96,6 +96,11 @@ public static class InputInjector
                     Mouse(MOUSEEVENTF_LEFTDOWN, 0);
                     Mouse(MOUSEEVENTF_LEFTUP, 0);
                     break;
+                case "mclick":
+                    if (t != null && j["x"] != null) Move(t, x, y);
+                    Mouse(0x0020, 0); // 中ボタン
+                    Mouse(0x0040, 0);
+                    break;
                 case "rclick_here":
                     Mouse(MOUSEEVENTF_RIGHTDOWN, 0);
                     Mouse(MOUSEEVENTF_RIGHTUP, 0);

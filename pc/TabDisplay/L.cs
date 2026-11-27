@@ -72,6 +72,26 @@ public static class L
         ["side_bottom"] = "PC の画面の下",
         ["chk_skip"] = "省電力：画面が変わらないときは送らない",
         ["tray_mode"] = "表示のしかた",
+        ["mode_region"] = "PC の画面の一部（ウィンドウ・範囲）だけ",
+        ["btn_region"] = "映すウィンドウ・範囲を選ぶ",
+        ["region_title"] = "映すウィンドウ・範囲",
+        ["region_window"] = "映すウィンドウを選んでください（動かしたり大きさを変えたりしても付いていきます）",
+        ["region_use_window"] = "このウィンドウを映す",
+        ["region_drag"] = "範囲をドラッグで選ぶ",
+        ["region_drag_help"] = "映す範囲をドラッグで囲んでください（Esc でやめる）",
+        ["st_no_region"] = "映すウィンドウが見つかりません。「映すウィンドウ・範囲を選ぶ」で選び直してください",
+        ["lbl_quality"] = "画質の方針",
+        ["q_auto"] = "自動（文字と動きで切り替え）",
+        ["q_text"] = "文字をくっきり",
+        ["q_motion"] = "動きをなめらか",
+        ["lbl_apps"] = "タブレットをつないだら、タブレットの画面で開くソフト（1 行に 1 つ）",
+        ["btn_browse"] = "ソフトを選んで足す",
+        ["lbl_profile"] = "設定の組み合わせ",
+        ["profile_name"] = "名前（同じ名前なら上書き）",
+        ["btn_profile_save"] = "今の設定を保存",
+        ["btn_profile_delete"] = "消す",
+        ["profile_applied"] = "「{0}」の設定にしました",
+        ["hotkey_help"] = "Ctrl + Alt + T：今のウィンドウを次の画面（タブレット）へ移す。もう一度押すと、その次の画面へ",
         ["chk_dpi"] = "文字の大きさ（拡大率）をタブレットに合わせる",
         ["chk_adaptive"] = "回線の混み具合に合わせて画質を自動で調整する（上の画質が上限）",
         ["tray_open"] = "開く",
@@ -98,7 +118,9 @@ public static class L
             "・ペンの筆圧・傾きは Windows 10（1809）以降で使えます。それより前はマウスの代わりになります。\n" +
             "・PC の音は、タブレットで少し遅れて鳴ります。PC 側のスピーカーからも鳴ったままです。\n" +
             "・USB でつなぐには、タブレットの「USB デバッグ」をオンにしておく必要があります。\n" +
-            "・「タブレットのみ」で切断したときは、PC の画面を自動で元に戻します。",
+            "・「タブレットのみ」で切断したときは、PC の画面を自動で元に戻します。\n" +
+            "・ゲームパッドのボタンは、キーボードのキー（矢印・Z・X など）として PC に届きます。\n" +
+            "・「文字をくっきり」は、動きの多い画面では少しカクつくことがあります。",
     };
 
     private static readonly Dictionary<string, string> En = new()
@@ -149,6 +171,26 @@ public static class L
         ["side_bottom"] = "Below the PC screen",
         ["chk_skip"] = "Power saving: send nothing while the screen does not change",
         ["tray_mode"] = "Show on",
+        ["mode_region"] = "Part of the PC screen (a window or an area)",
+        ["btn_region"] = "Choose the window or area",
+        ["region_title"] = "Window or area to show",
+        ["region_window"] = "Choose a window to show (it follows when the window moves or resizes)",
+        ["region_use_window"] = "Show this window",
+        ["region_drag"] = "Drag to choose an area",
+        ["region_drag_help"] = "Drag to choose the area to show (Esc to cancel)",
+        ["st_no_region"] = "The window was not found. Choose it again with \"Choose the window or area\".",
+        ["lbl_quality"] = "Picture style",
+        ["q_auto"] = "Automatic (text or motion)",
+        ["q_text"] = "Sharp text",
+        ["q_motion"] = "Smooth motion",
+        ["lbl_apps"] = "Programs to open on the tablet screen when a tablet connects (one per line)",
+        ["btn_browse"] = "Add a program",
+        ["lbl_profile"] = "Saved settings",
+        ["profile_name"] = "Name (the same name overwrites)",
+        ["btn_profile_save"] = "Save current settings",
+        ["btn_profile_delete"] = "Delete",
+        ["profile_applied"] = "Switched to \"{0}\"",
+        ["hotkey_help"] = "Ctrl + Alt + T: move the current window to the next screen (tablet). Press again for the screen after that.",
         ["chk_dpi"] = "Match the text size (scale) to the tablet",
         ["chk_adaptive"] = "Adjust quality automatically to the connection (up to the quality above)",
         ["tray_open"] = "Open",
@@ -175,6 +217,8 @@ public static class L
             "- Pen pressure and tilt need Windows 10 (1809) or later. On older Windows the pen works as a mouse.\n" +
             "- The PC's sound plays on the tablet with a short delay, and still plays from the PC speakers.\n" +
             "- To connect with USB, \"USB debugging\" must be on on the tablet.\n" +
-            "- In \"Tablet only\", the PC screens are restored automatically when the tablet disconnects.",
+            "- In \"Tablet only\", the PC screens are restored automatically when the tablet disconnects.\n" +
+            "- Gamepad buttons reach the PC as keyboard keys (arrows, Z, X, and so on).\n" +
+            "- \"Sharp text\" may be a little choppy on screens with a lot of motion.",
     };
 }

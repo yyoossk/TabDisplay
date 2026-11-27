@@ -18,7 +18,11 @@ public record CaptureSpec(
     int OutHeight,
     int Fps,
     int BitrateMbps,
-    bool SkipStatic = true);  // 省電力：変化がないときは絵を出さない
+    bool SkipStatic = true,   // 省電力：変化がないときは絵を出さない
+    int OffsetX = 0,          // 画面の一部だけ撮るとき（画面の左上からの位置）
+    int OffsetY = 0,
+    bool Region = false,
+    bool TextQuality = false); // 文字をくっきり（動きは少しにじんでもよい）
 
 /// <summary>
 /// ffmpeg で画面を撮って H.264 にする。
@@ -54,23 +58,33 @@ public sealed class Capture : IDisposable
 
     private record Enc(string Name, string Codec, bool GpuFrames, Func<CaptureSpec, string> Args);
 
+    // 動きをなめらか：遅れ最小・ビットレート一定
+    // 文字をくっきり：画質を一定に保つ（変化の少ない画面で文字がにじまない）。上限は設定のビットレートの 1.5 倍
     private static readonly Enc[] Encoders =
     {
-        new("nvenc", "h264_nvenc", true, s =>
-            $"-c:v h264_nvenc -preset p1 -tune ull -zerolatency 1 -rc cbr {Rate(s)} -bf 0 -g {Gop(s)} -forced-idr 1 -delay 0 -profile:v high"),
-        new("amf", "h264_amf", true, s =>
-            $"-c:v h264_amf -usage ultralowlatency -quality speed -rc cbr {Rate(s)} -bf 0 -g {Gop(s)} -header_insertion_mode idr"),
-        new("qsv", "h264_qsv", false, s =>
-            $"-c:v h264_qsv -preset veryfast -look_ahead 0 -async_depth 1 {Rate(s)} -bf 0 -g {Gop(s)}"),
-        new("mf", "h264_mf", false, s =>
-            $"-c:v h264_mf -hw_encoding 1 -scenario display_remoting -rate_control cbr -b:v {s.BitrateMbps}M -bf 0 -g {Gop(s)}"),
-        new("x264", "libx264", false, s =>
-            $"-c:v libx264 -preset ultrafast -tune zerolatency {Rate(s)} -bf 0 -g {Gop(s)} -profile:v high"),
+        new("nvenc", "h264_nvenc", true, s => s.TextQuality
+            ? $"-c:v h264_nvenc -preset p4 -tune ll -zerolatency 1 -rc vbr -cq 19 {Rate(s, 1.5)} -bf 0 -g {Gop(s)} -forced-idr 1 -delay 0 -profile:v high"
+            : $"-c:v h264_nvenc -preset p1 -tune ull -zerolatency 1 -rc cbr {Rate(s)} -bf 0 -g {Gop(s)} -forced-idr 1 -delay 0 -profile:v high"),
+        new("amf", "h264_amf", true, s => s.TextQuality
+            ? $"-c:v h264_amf -usage lowlatency -quality quality -rc qvbr -qvbr_quality_level 22 {Rate(s, 1.5)} -bf 0 -g {Gop(s)} -header_insertion_mode idr"
+            : $"-c:v h264_amf -usage ultralowlatency -quality speed -rc cbr {Rate(s)} -bf 0 -g {Gop(s)} -header_insertion_mode idr"),
+        new("qsv", "h264_qsv", false, s => s.TextQuality
+            ? $"-c:v h264_qsv -preset medium -look_ahead 0 -async_depth 1 -global_quality 22 {Rate(s, 1.5)} -bf 0 -g {Gop(s)}"
+            : $"-c:v h264_qsv -preset veryfast -look_ahead 0 -async_depth 1 {Rate(s)} -bf 0 -g {Gop(s)}"),
+        new("mf", "h264_mf", false, s => s.TextQuality
+            ? $"-c:v h264_mf -hw_encoding 1 -scenario display_remoting -rate_control quality -quality 80 -b:v {s.BitrateMbps}M -bf 0 -g {Gop(s)}"
+            : $"-c:v h264_mf -hw_encoding 1 -scenario display_remoting -rate_control cbr -b:v {s.BitrateMbps}M -bf 0 -g {Gop(s)}"),
+        new("x264", "libx264", false, s => s.TextQuality
+            ? $"-c:v libx264 -preset veryfast -tune zerolatency -crf 20 {Rate(s, 1.5)} -bf 0 -g {Gop(s)} -profile:v high"
+            : $"-c:v libx264 -preset ultrafast -tune zerolatency {Rate(s)} -bf 0 -g {Gop(s)} -profile:v high"),
     };
 
     // ビットレート：VBV（ため込み）は 4 枚分にして、遅れが出ないようにする
-    private static string Rate(CaptureSpec s) =>
-        $"-b:v {s.BitrateMbps}M -maxrate {s.BitrateMbps}M -bufsize {Math.Max(1, s.BitrateMbps * 1000 * 4 / Math.Max(1, s.Fps))}k";
+    private static string Rate(CaptureSpec s, double maxFactor = 1.0)
+    {
+        int max = (int)(s.BitrateMbps * 1000 * maxFactor);
+        return $"-b:v {s.BitrateMbps}M -maxrate {max}k -bufsize {Math.Max(1000, max * 4 / Math.Max(1, s.Fps))}k";
+    }
 
     // キーフレームは 2 秒ごと（届かなかった絵があっても 2 秒で直る）
     private static int Gop(CaptureSpec s) => s.Fps * 2;
@@ -113,6 +127,9 @@ public sealed class Capture : IDisposable
 
         // dup_frames=0：画面が変わらないときは絵を出さない（送る量・タブレットの電池を節約）
         var filter = new StringBuilder($"ddagrab=output_idx={output}:framerate={Spec.Fps}:draw_mouse=1:dup_frames={(Spec.SkipStatic ? 0 : 1)}");
+        // 画面の一部だけ撮る（ウィンドウ・選んだ範囲）
+        if (Spec.Region)
+            filter.Append($":offset_x={Spec.OffsetX}:offset_y={Spec.OffsetY}:video_size={Spec.SourceWidth}x{Spec.SourceHeight}");
         if (scale)
             filter.Append($",hwdownload,format=bgra,scale={Spec.OutWidth}:{Spec.OutHeight}:flags=fast_bilinear,format=nv12");
         else if (!enc.GpuFrames)
