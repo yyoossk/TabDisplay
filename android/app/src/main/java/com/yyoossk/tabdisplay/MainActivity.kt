@@ -93,6 +93,12 @@ class MainActivity : Activity() {
         col.addView(body(getString(R.string.gestures)))
         col.addView(body(getString(R.string.buttons_help)))
 
+        col.addView(Button(this).apply {
+            setText(R.string.sender_open)
+            isAllCaps = false
+            setOnClickListener { startActivity(Intent(this@MainActivity, SenderActivity::class.java)) }
+        })
+
         col.addView(title(R.string.recent_title))
         recentBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         col.addView(recentBox)

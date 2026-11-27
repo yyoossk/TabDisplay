@@ -61,4 +61,20 @@
     <string name="input_only_off">映像を出すモードに戻しました</string>
     <string name="no_region">PC で映すウィンドウが見つかりません。</string>
     <string name="buttons_help">右下のボタン：☰ ショートカット ／ 🎮 ゲームパッド ／ ◧ 左端に「右」「中」ボタンとスクロールの帯（「右」「中」を押しながら画面をタップ）／ ✎ ペンタブレットモード（映像なし）／ 🖱 タッチパッドモード ／ ⌨ キーボード\nゲームパッドのボタンはキーとして送ります：十字＝矢印、A＝X、B＝Z、X＝S、Y＝A、L＝Q、R＝W、START＝Enter、SELECT＝右 Shift</string>
+    <string name="sender_title">この端末の画面をほかのタブレットに映す</string>
+    <string name="sender_help">PC はいりません。ほかのタブレットの TabDisplay で「QR コードを読む」を押して、ここに出る QR コードを読み取ってください。2 台は同じ Wi-Fi につないでください。\nほかのタブレットからこの端末を操作するには、ユーザー補助の「TabDisplay」をオンにしてください（Android 7 以降）。タップ・長押し・スクロール・簡単な文字入力ができます。</string>
+    <string name="sender_audio">この端末の音も送る（Android 10 以降）</string>
+    <string name="sender_start">始める</string>
+    <string name="sender_stop">やめる</string>
+    <string name="sender_waiting">ほかのタブレットを待っています…</string>
+    <string name="sender_connected">%1$s に映しています</string>
+    <string name="sender_running">この画面を送っています</string>
+    <string name="sender_stopped">止まっています</string>
+    <string name="sender_error">始められませんでした：%1$s</string>
+    <string name="sender_no_ip">Wi-Fi につながっていません</string>
+    <string name="sender_a11y_off">ほかのタブレットからの操作を許可する（ユーザー補助の設定を開く）</string>
+    <string name="sender_a11y_on">ほかのタブレットからの操作：オン（ユーザー補助の設定を開く）</string>
+    <string name="sender_open">この端末の画面をほかのタブレットに映す</string>
+    <string name="a11y_label">TabDisplay（ほかのタブレットからの操作）</string>
+    <string name="a11y_description">この端末の画面を TabDisplay でほかのタブレットに映している間だけ、そのタブレットでのタップやスクロールを、この端末のタップやスクロールにするために使います。</string>
 </resources>

@@ -61,4 +61,20 @@
     <string name="input_only_off">Showing the picture again</string>
     <string name="no_region">The window to show was not found on the PC.</string>
     <string name="buttons_help">Buttons at the bottom right: ☰ shortcuts / 🎮 gamepad / ◧ right, middle and scroll buttons on the left edge (hold Right or Middle and tap the screen) / ✎ pen tablet mode (no picture) / 🖱 touchpad mode / ⌨ keyboard\nGamepad buttons are sent as keys: arrows, A=X, B=Z, X=S, Y=A, L=Q, R=W, START=Enter, SELECT=right Shift</string>
+    <string name="sender_title">Show this device\'s screen on another tablet</string>
+    <string name="sender_help">No PC needed. On the other tablet, open TabDisplay, press \"Scan QR code\" and scan the code shown here. Both devices must be on the same Wi-Fi.\nTo operate this device from the other tablet, turn on the TabDisplay accessibility service (Android 7 or later). Taps, long presses, scrolling and simple text input work.</string>
+    <string name="sender_audio">Also send this device\'s sound (Android 10 or later)</string>
+    <string name="sender_start">Start</string>
+    <string name="sender_stop">Stop</string>
+    <string name="sender_waiting">Waiting for the other tablet…</string>
+    <string name="sender_connected">Showing on %1$s</string>
+    <string name="sender_running">Sending this screen</string>
+    <string name="sender_stopped">Stopped</string>
+    <string name="sender_error">Could not start: %1$s</string>
+    <string name="sender_no_ip">Not connected to Wi-Fi</string>
+    <string name="sender_a11y_off">Allow operation from the other tablet (open accessibility settings)</string>
+    <string name="sender_a11y_on">Operation from the other tablet: on (open accessibility settings)</string>
+    <string name="sender_open">Show this device\'s screen on another tablet</string>
+    <string name="a11y_label">TabDisplay (operation from another tablet)</string>
+    <string name="a11y_description">Used only while this device\'s screen is shown on another tablet with TabDisplay, to turn taps and scrolling on that tablet into taps and scrolling on this device.</string>
 </resources>
