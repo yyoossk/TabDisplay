@@ -11,6 +11,12 @@ import java.io.DataOutputStream
 import java.io.IOException
 import java.net.InetSocketAddress
 import java.net.Socket
+import java.security.MessageDigest
+import java.security.cert.CertificateException
+import java.security.cert.X509Certificate
+import javax.net.ssl.SSLContext
+import javax.net.ssl.SSLSocket
+import javax.net.ssl.X509TrustManager
 
 /**
  * PC との接続。切れたら自動でつなぎ直す（close() されるまで）。
@@ -37,6 +43,7 @@ class Connection(
 
     @Volatile private var closed = false
     @Volatile private var socket: Socket? = null
+    @Volatile private var tlsFailed = false
     @Volatile private var out: DataOutputStream? = null
     private var thread: Thread? = null
     private var pinger: Thread? = null
@@ -64,12 +71,23 @@ class Connection(
                     s.tcpNoDelay = true
                     s.receiveBufferSize = 4 * 1024 * 1024
                     s.connect(InetSocketAddress(host, target.port), 3000)
-                    s.soTimeout = 0
-                    socket = s
+                    // 通信を暗号化する。相手の証明書が QR で受け取った指紋と同じか確かめる
+                    s.soTimeout = 8000
+                    val tls = wrapTls(s, host)
+                    tls.startHandshake()
+                    tls.soTimeout = 0
+                    socket = tls
                     lastGoodHost = host
                     connected = true
                     failures = 0
-                    session(s, host)
+                    session(tls, host)
+                } catch (e: javax.net.ssl.SSLHandshakeException) {
+                    Log.i(TAG, "tls $host: $e")
+                    if (tlsFailed) {
+                        closed = true
+                        listener.onError("tls")
+                        return
+                    }
                 } catch (e: Exception) {
                     Log.i(TAG, "connect/session $host: $e")
                 } finally {
@@ -89,6 +107,29 @@ class Connection(
     }
 
     @Volatile private var lastGoodHost: String? = null
+
+    private fun wrapTls(plain: Socket, host: String): SSLSocket {
+        val want = target.fp.lowercase()
+        val tm = object : X509TrustManager {
+            override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+            override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {
+                val leaf = chain?.firstOrNull() ?: throw CertificateException("no cert")
+                val got = MessageDigest.getInstance("SHA-256").digest(leaf.encoded)
+                    .joinToString("") { "%02x".format(it) }
+                if (want.isEmpty() || got != want) {
+                    tlsFailed = true
+                    throw CertificateException("fingerprint mismatch")
+                }
+            }
+            override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
+        }
+        val ctx = SSLContext.getInstance("TLS")
+        ctx.init(null, arrayOf(tm), null)
+        val ssl = ctx.socketFactory.createSocket(plain, host, target.port, true) as SSLSocket
+        // Android 6 でも TLS 1.2 を使う
+        ssl.enabledProtocols = ssl.supportedProtocols.filter { it == "TLSv1.2" || it == "TLSv1.3" }.toTypedArray()
+        return ssl
+    }
 
     /** Wi-Fi で見つかった今の IP → 前にうまくいった IP → QR の IP の順に試す */
     private fun orderedHosts(): List<String> {

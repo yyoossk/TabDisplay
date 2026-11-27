@@ -21,6 +21,9 @@ import android.view.KeyEvent
 import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
 import android.widget.FrameLayout
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import org.json.JSONArray
 import android.widget.TextView
 import android.widget.Toast
 import org.json.JSONObject
@@ -42,6 +45,12 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
     private lateinit var statsView: TextView
     private lateinit var keyView: KeyInputView
     private lateinit var kbButton: TextView
+    private lateinit var tpButton: TextView
+    private lateinit var sideBar: LinearLayout
+    private lateinit var sideScroll: ScrollView
+    private var lastTouch = SystemClock.elapsedRealtime()
+    private var dimmed = false
+    private val tpHelp by lazy { Toast.makeText(this, R.string.touchpad_on, Toast.LENGTH_LONG) }
     private var keyboardShown = false
     private val audioLock = Object()
     private var audio: AudioPlayer? = null
@@ -104,18 +113,42 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
         // キーボードを出すボタン（右下・半透明）と、見えない入力欄
         keyView = KeyInputView(this) { k, v -> sendKeyInput(k, v) }
         root.addView(keyView, FrameLayout.LayoutParams(1, 1, Gravity.TOP or Gravity.START))
-        kbButton = TextView(this).apply {
-            text = "⌨"
+        // 右下のボタン：⌨ キーボード / ☰ ショートカット / 🖱 タッチパッドモード（半透明）
+        fun roundButton(label: String, onClick: () -> Unit) = TextView(this).apply {
+            text = label
             setTextColor(Color.WHITE)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
             setBackgroundColor(0x66000000)
             gravity = Gravity.CENTER
             alpha = 0.6f
-            setOnClickListener { toggleKeyboard() }
+            setOnClickListener { onClick() }
         }
-        root.addView(kbButton, FrameLayout.LayoutParams(dp(48), dp(48), Gravity.BOTTOM or Gravity.END).apply {
-            setMargins(0, 0, dp(12), dp(12))
+        kbButton = roundButton("⌨") { toggleKeyboard() }
+        tpButton = roundButton("🖱") { toggleTouchpad() }
+        val menuButton = roundButton("☰") {
+            sideScroll.visibility = if (sideScroll.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+        }
+        val buttons = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        for (b in listOf(menuButton, tpButton, kbButton)) {
+            buttons.addView(b, LinearLayout.LayoutParams(dp(44), dp(44)).apply { setMargins(0, dp(6), 0, 0) })
+        }
+        root.addView(buttons, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT,
+            Gravity.BOTTOM or Gravity.END).apply { setMargins(0, 0, dp(10), dp(10)) })
+
+        // ショートカットのボタンの列（右端・☰ で出し入れ）
+        sideBar = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        sideScroll = ScrollView(this).apply {
+            addView(sideBar)
+            visibility = View.GONE
+            setBackgroundColor(0x88000000.toInt())
+        }
+        root.addView(sideScroll, FrameLayout.LayoutParams(
+            dp(120), FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.END or Gravity.CENTER_VERTICAL).apply {
+            setMargins(0, 0, dp(60), 0)
         })
+        buildShortcuts()
+        updateTouchpadButton()
         setContentView(root)
         Discovery.start(this)
         root.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> layoutVideo() }
@@ -146,6 +179,44 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
         conn = Connection(t, this).also { it.start() }
     }
 
+    override fun onResume() {
+        super.onResume()
+        buildShortcuts()
+        updateTouchpadButton()
+    }
+
+    private fun buildShortcuts() {
+        sideBar.removeAllViews()
+        for (id in prefs.shortcuts) {
+            val item = Shortcuts.byId(id) ?: continue
+            sideBar.addView(TextView(this).apply {
+                setText(item.label)
+                setTextColor(Color.WHITE)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+                gravity = Gravity.CENTER
+                setPadding(dp(6), dp(12), dp(6), dp(12))
+                setOnClickListener {
+                    if (prefs.haptic) performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                    val a = JSONArray()
+                    item.vks.forEach { a.put(it) }
+                    conn?.post(Protocol.T_INPUT, JSONObject().put("k", "combo").put("vks", a))
+                }
+            })
+        }
+    }
+
+    private fun toggleTouchpad() {
+        prefs.touchpad = !prefs.touchpad
+        updateTouchpadButton()
+        if (prefs.touchpad) tpHelp.show()
+        else Toast.makeText(this, R.string.touchpad_off, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun updateTouchpadButton() {
+        tpButton.alpha = if (prefs.touchpad) 1f else 0.6f
+        tpButton.setBackgroundColor(if (prefs.touchpad) 0xCC1E88E5.toInt() else 0x66000000)
+    }
+
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) hideSystemUi()
@@ -166,8 +237,8 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         hideSystemUi()
-        // 回した直後は大きさがまだ古いことがあるので、少し待ってから送る
-        ui.postDelayed({ sendSizeIfChanged() }, 250)
+        // 回した直後は大きさがまだ古いことがあるので、何度か確かめて、変わったらすぐ送る
+        for (d in longArrayOf(0, 60, 200, 500)) ui.postDelayed({ sendSizeIfChanged() }, d)
     }
 
     private fun sendSizeIfChanged() {
@@ -299,7 +370,11 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
 
     override fun onError(e: String) {
         ui.post {
-            showMessage(if (e == "token") getString(R.string.err_token) else e)
+            showMessage(when (e) {
+                "token" -> getString(R.string.err_token)
+                "tls" -> getString(R.string.err_tls)
+                else -> e
+            })
         }
     }
 
@@ -368,6 +443,11 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
             } else {
                 statsView.visibility = View.GONE
             }
+            // 省電力：5 分さわらなければ画面を暗くする
+            if (prefs.dim && !dimmed && SystemClock.elapsedRealtime() - lastTouch > 5 * 60_000L) {
+                dimmed = true
+                window.attributes = window.attributes.apply { screenBrightness = 0.05f }
+            }
             if (fps > 0) conn?.post(Protocol.T_STATS, JSONObject().put("fps", fps).put("lat", lat).put("rtt", rtt))
             ui.postDelayed(this, 1000)
         }
@@ -408,6 +488,11 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
         }
 
         video.setOnTouchListener { v, e ->
+            touched()
+            if (prefs.touchpad && !isPen(e)) {
+                touchpad(v, e)
+                return@setOnTouchListener true
+            }
             if (isPen(e)) {
                 handlePen(v, e)
                 return@setOnTouchListener true
@@ -500,6 +585,113 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
                 MotionEvent.ACTION_HOVER_EXIT -> sendPen(v, e, "x")
             }
             true
+        }
+    }
+
+    /** さわったら暗くしていた画面を戻す */
+    private fun touched() {
+        lastTouch = SystemClock.elapsedRealtime()
+        if (dimmed) {
+            dimmed = false
+            window.attributes = window.attributes.apply {
+                screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+            }
+        }
+    }
+
+    // ---------- タッチパッドモード ----------
+    // なぞる → カーソルを動かす / タップ → クリック / 2 本指タップ → 右クリック
+    // 2 本指でなぞる → スクロール / 2 回タップしてなぞる → ドラッグ
+
+    private var tpLastX = 0f
+    private var tpLastY = 0f
+    private var tpDownX = 0f
+    private var tpDownY = 0f
+    private var tpDownTime = 0L
+    private var tpMoved = false
+    private var tpTwo = false
+    private var tpTwoDone = false
+    private var tpTwoMoved = false
+    private var tpTwoStart = 0L
+    private var tpLastTapUp = 0L
+    private var tpDragging = false
+    private var tpAccX = 0f
+    private var tpAccY = 0f
+    private var tpScrollY = 0f
+    private var tpScrollX = 0f
+
+    private fun touchpad(v: View, e: MotionEvent) {
+        val slop = ViewConfiguration.get(this).scaledTouchSlop.toFloat()
+        val speed = 1.6f
+        val notchPx = dp(40).toFloat()
+        val now = SystemClock.elapsedRealtime()
+        when (e.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                tpLastX = e.x; tpLastY = e.y; tpDownX = e.x; tpDownY = e.y
+                tpDownTime = now; tpMoved = false; tpTwo = false; tpTwoDone = false
+                tpAccX = 0f; tpAccY = 0f
+                if (now - tpLastTapUp < 300) {
+                    tpDragging = true
+                    conn?.post(Protocol.T_INPUT, JSONObject().put("k", "ldown"))
+                }
+            }
+            MotionEvent.ACTION_POINTER_DOWN -> if (e.pointerCount == 2 && !tpDragging) {
+                tpTwo = true; tpTwoMoved = false; tpTwoStart = now
+                tpLastX = (e.getX(0) + e.getX(1)) / 2
+                tpLastY = (e.getY(0) + e.getY(1)) / 2
+                tpScrollX = 0f; tpScrollY = 0f
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (tpTwo && e.pointerCount >= 2) {
+                    val mx = (e.getX(0) + e.getX(1)) / 2
+                    val my = (e.getY(0) + e.getY(1)) / 2
+                    if (hypot(mx - tpLastX, my - tpLastY) > 0) {
+                        tpScrollY += (my - tpLastY) / notchPx * 120f
+                        tpScrollX += -(mx - tpLastX) / notchPx * 120f
+                        if (abs(tpScrollY) > 3 || abs(tpScrollX) > 3) tpTwoMoved = true
+                        val wy = tpScrollY.toInt()
+                        val wx = tpScrollX.toInt()
+                        if (abs(wy) >= 1 || abs(wx) >= 1) {
+                            tpScrollY -= wy; tpScrollX -= wx
+                            conn?.post(Protocol.T_INPUT, JSONObject().put("k", "scroll").put("wx", wx).put("wy", wy))
+                        }
+                    }
+                    tpLastX = mx; tpLastY = my
+                } else if (!tpTwo && !tpTwoDone) {
+                    if (hypot(e.x - tpDownX, e.y - tpDownY) > slop) tpMoved = true
+                    tpAccX += (e.x - tpLastX) * speed
+                    tpAccY += (e.y - tpLastY) * speed
+                    tpLastX = e.x; tpLastY = e.y
+                    val dx = tpAccX.toInt()
+                    val dy = tpAccY.toInt()
+                    if (dx != 0 || dy != 0) {
+                        tpAccX -= dx; tpAccY -= dy
+                        conn?.post(Protocol.T_INPUT, JSONObject().put("k", "rel").put("dx", dx).put("dy", dy))
+                    }
+                }
+            }
+            MotionEvent.ACTION_POINTER_UP -> if (tpTwo) {
+                if (!tpTwoMoved && now - tpTwoStart < 350) {
+                    if (prefs.haptic) video.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                    conn?.post(Protocol.T_INPUT, JSONObject().put("k", "rclick_here"))
+                }
+                tpTwo = false
+                tpTwoDone = true
+            }
+            MotionEvent.ACTION_UP -> {
+                if (tpDragging) {
+                    tpDragging = false
+                    conn?.post(Protocol.T_INPUT, JSONObject().put("k", "lup"))
+                    tpLastTapUp = 0
+                } else if (!tpMoved && !tpTwoDone && now - tpDownTime < 250) {
+                    conn?.post(Protocol.T_INPUT, JSONObject().put("k", "lclick"))
+                    tpLastTapUp = now
+                }
+            }
+            MotionEvent.ACTION_CANCEL -> if (tpDragging) {
+                tpDragging = false
+                conn?.post(Protocol.T_INPUT, JSONObject().put("k", "lup"))
+            }
         }
     }
 

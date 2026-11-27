@@ -24,6 +24,7 @@ class MainActivity : Activity() {
 
     private lateinit var prefs: Prefs
     private lateinit var recentBox: LinearLayout
+    private lateinit var shortcutBox: LinearLayout
     /** 開いてから 1 回だけ自動接続する（切断して戻ってきたときにまたつながらないように） */
     private var autoDone = false
     private val onFound: (Discovery.Found) -> Unit = { f ->
@@ -112,6 +113,11 @@ class MainActivity : Activity() {
             setOnCheckedChangeListener { _, b -> prefs.audio = b }
         })
         col.addView(CheckBox(this).apply {
+            setText(R.string.opt_dim)
+            isChecked = prefs.dim
+            setOnCheckedChangeListener { _, b -> prefs.dim = b }
+        })
+        col.addView(CheckBox(this).apply {
             setText(R.string.opt_haptic)
             isChecked = prefs.haptic
             setOnCheckedChangeListener { _, b -> prefs.haptic = b }
@@ -127,6 +133,12 @@ class MainActivity : Activity() {
             })
         }
         col.addView(group)
+
+        col.addView(title(R.string.shortcuts_title))
+        col.addView(body(getString(R.string.shortcuts_help)))
+        shortcutBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        col.addView(shortcutBox)
+        refreshShortcuts()
 
         col.addView(title(R.string.notes_title))
         col.addView(body(getString(R.string.notes)).apply { alpha = 0.75f })
@@ -156,6 +168,45 @@ class MainActivity : Activity() {
                 setOnClickListener { prefs.forget(t); refreshRecent() }
             })
             recentBox.addView(row)
+        }
+    }
+
+    /** ショートカットのボタンの選び方と並び順 */
+    private fun refreshShortcuts() {
+        shortcutBox.removeAllViews()
+        val order = prefs.shortcutOrder
+        val shown = prefs.shortcuts.toSet()
+        order.forEachIndexed { i, id ->
+            val item = Shortcuts.byId(id) ?: return@forEachIndexed
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            row.addView(CheckBox(this).apply {
+                setText(item.label)
+                isChecked = id in shown
+                setOnCheckedChangeListener { _, b ->
+                    val now = prefs.shortcuts.toMutableSet()
+                    if (b) now.add(id) else now.remove(id)
+                    prefs.shortcuts = prefs.shortcutOrder.filter { it in now }
+                }
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            if (i > 0) row.addView(Button(this).apply {
+                text = "↑"
+                setOnClickListener {
+                    val o = prefs.shortcutOrder.toMutableList()
+                    val k = o.indexOf(id)
+                    if (k > 0) {
+                        o[k] = o[k - 1]
+                        o[k - 1] = id
+                        prefs.shortcutOrder = o
+                        val now = prefs.shortcuts.toSet()
+                        prefs.shortcuts = o.filter { it in now }
+                        refreshShortcuts()
+                    }
+                }
+            })
+            shortcutBox.addView(row)
         }
     }
 

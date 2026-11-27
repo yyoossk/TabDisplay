@@ -17,7 +17,8 @@ public record CaptureSpec(
     int OutWidth,          // 送る大きさ（違えば縮める）
     int OutHeight,
     int Fps,
-    int BitrateMbps);
+    int BitrateMbps,
+    bool SkipStatic = true);  // 省電力：変化がないときは絵を出さない
 
 /// <summary>
 /// ffmpeg で画面を撮って H.264 にする。
@@ -110,7 +111,8 @@ public sealed class Capture : IDisposable
         var (adapter, output) = dx.Value;
         var scale = Spec.OutWidth != Spec.SourceWidth || Spec.OutHeight != Spec.SourceHeight;
 
-        var filter = new StringBuilder($"ddagrab=output_idx={output}:framerate={Spec.Fps}:draw_mouse=1");
+        // dup_frames=0：画面が変わらないときは絵を出さない（送る量・タブレットの電池を節約）
+        var filter = new StringBuilder($"ddagrab=output_idx={output}:framerate={Spec.Fps}:draw_mouse=1:dup_frames={(Spec.SkipStatic ? 0 : 1)}");
         if (scale)
             filter.Append($",hwdownload,format=bgra,scale={Spec.OutWidth}:{Spec.OutHeight}:flags=fast_bilinear,format=nv12");
         else if (!enc.GpuFrames)

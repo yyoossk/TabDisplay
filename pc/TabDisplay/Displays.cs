@@ -80,6 +80,38 @@ public static class Displays
         return r == DISP_CHANGE_SUCCESSFUL;
     }
 
+    /// <summary>
+    /// 仮想ディスプレイ（タブレット）を、PC の画面の右・左・上・下に並べる。2 台以上は外側へ順に並べる。
+    /// </summary>
+    public static void PlaceVirtuals(IList<string> names, TabletSide side)
+    {
+        var all = Attached();
+        var phys = all.Where(d => !IsVirtual(d.Description, d.DeviceId)).ToList();
+        if (phys.Count == 0 || names.Count == 0) return;
+        var primary = phys.FirstOrDefault(d => d.Primary) ?? phys[0];
+        int left = phys.Min(d => d.X), top = phys.Min(d => d.Y);
+        int right = phys.Max(d => d.X + d.Width), bottom = phys.Max(d => d.Y + d.Height);
+        int cx = side == TabletSide.Left ? left : right;
+        int cy = side == TabletSide.Top ? top : bottom;
+        foreach (var name in names)
+        {
+            var dm = DEVMODE.Create();
+            if (!EnumDisplaySettingsEx(name, ENUM_CURRENT_SETTINGS, ref dm, 0)) continue;
+            int w = (int)dm.dmPelsWidth, h = (int)dm.dmPelsHeight;
+            switch (side)
+            {
+                case TabletSide.Right: dm.dmPositionX = cx; dm.dmPositionY = primary.Y; cx += w; break;
+                case TabletSide.Left: cx -= w; dm.dmPositionX = cx; dm.dmPositionY = primary.Y; break;
+                case TabletSide.Top: cy -= h; dm.dmPositionX = primary.X; dm.dmPositionY = cy; break;
+                default: dm.dmPositionX = primary.X; dm.dmPositionY = cy; cy += h; break;
+            }
+            dm.dmFields = DM_POSITION;
+            ChangeDisplaySettingsEx(name, ref dm, IntPtr.Zero, CDS_UPDATEREGISTRY | CDS_NORESET, IntPtr.Zero);
+        }
+        var r = ChangeDisplaySettingsExApply(null, IntPtr.Zero, IntPtr.Zero, 0, IntPtr.Zero);
+        Log.Write($"PlaceVirtuals {side}: {r}");
+    }
+
     // ---------- タブレットのみ ----------
 
     private static string RestoreFile => Path.Combine(AppSettings.Dir, "restore-displays.json");

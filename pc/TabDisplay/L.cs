@@ -65,6 +65,13 @@ public static class L
         ["chk_tray"] = "起動時は右下のアイコンにしまう",
         ["chk_autousb"] = "USB で挿したら自動で接続する",
         ["chk_audio"] = "PC の音もタブレットで鳴らす",
+        ["lbl_side"] = "タブレットの置き場所",
+        ["side_right"] = "PC の画面の右",
+        ["side_left"] = "PC の画面の左",
+        ["side_top"] = "PC の画面の上",
+        ["side_bottom"] = "PC の画面の下",
+        ["chk_skip"] = "省電力：画面が変わらないときは送らない",
+        ["tray_mode"] = "表示のしかた",
         ["chk_dpi"] = "文字の大きさ（拡大率）をタブレットに合わせる",
         ["chk_adaptive"] = "回線の混み具合に合わせて画質を自動で調整する（上の画質が上限）",
         ["tray_open"] = "開く",
@@ -85,7 +92,8 @@ public static class L
         ["notes"] =
             "・タブレットを 2 台以上つないでいるときに、1 台つないだり外したりすると、全部のタブレットの映像が数秒止まります（画面を組み直すため）。\n" +
             "・画質の自動調整で画質が変わるとき、そのタブレットの映像が一瞬止まります（6 秒に 1 回まで）。\n" +
-            "・タブレットを回したときも、そのタブレットの映像が一瞬止まります。\n" +
+            "・タブレットを回したときも、そのタブレットの映像がごく短く止まります。\n" +
+            "・通信はすべて暗号化しています。Wi-Fi で初めてつなぐときは QR コードを読んでください（PC の確認に使います）。\n" +
             "・管理者として動いているソフトの窓は、タブレットから操作できません（Windows の決まり）。\n" +
             "・ペンの筆圧・傾きは Windows 10（1809）以降で使えます。それより前はマウスの代わりになります。\n" +
             "・PC の音は、タブレットで少し遅れて鳴ります。PC 側のスピーカーからも鳴ったままです。\n" +
@@ -134,6 +142,13 @@ public static class L
         ["chk_tray"] = "Start minimized to the tray icon",
         ["chk_autousb"] = "Connect automatically when plugged in with USB",
         ["chk_audio"] = "Play the PC's sound on the tablet",
+        ["lbl_side"] = "Tablet position",
+        ["side_right"] = "Right of the PC screen",
+        ["side_left"] = "Left of the PC screen",
+        ["side_top"] = "Above the PC screen",
+        ["side_bottom"] = "Below the PC screen",
+        ["chk_skip"] = "Power saving: send nothing while the screen does not change",
+        ["tray_mode"] = "Show on",
         ["chk_dpi"] = "Match the text size (scale) to the tablet",
         ["chk_adaptive"] = "Adjust quality automatically to the connection (up to the quality above)",
         ["tray_open"] = "Open",
@@ -154,7 +169,8 @@ public static class L
         ["notes"] =
             "- With two or more tablets, connecting or disconnecting one stops the picture on all tablets for a few seconds (the screens are rebuilt).\n" +
             "- When automatic quality changes the quality, that tablet's picture stops for a moment (at most once every 6 seconds).\n" +
-            "- Rotating a tablet also stops that tablet's picture for a moment.\n" +
+            "- Rotating a tablet also stops that tablet's picture very briefly.\n" +
+            "- All communication is encrypted. The first Wi-Fi connection needs the QR code (it is used to verify the PC).\n" +
             "- Windows of programs running as administrator cannot be operated from the tablet (a Windows rule).\n" +
             "- Pen pressure and tilt need Windows 10 (1809) or later. On older Windows the pen works as a mouse.\n" +
             "- The PC's sound plays on the tablet with a short delay, and still plays from the PC speakers.\n" +

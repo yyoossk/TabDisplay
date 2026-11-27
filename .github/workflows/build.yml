@@ -90,6 +90,14 @@ jobs:
 
           Copy-Item THIRD_PARTY.md "$out/licenses/"
 
+      - name: Installer (Inno Setup)
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          $ver = (Select-Xml -Path pc/TabDisplay/TabDisplay.csproj -XPath "//Version").Node.InnerText
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DSrcDir="$PWD\out\TabDisplay" /DAppVersion=$ver installer\TabDisplay.iss
+          if (-not (Test-Path out/TabDisplay-Setup.exe)) { throw "installer not built" }
+
       - name: Pack
         shell: pwsh
         run: |
@@ -101,6 +109,7 @@ jobs:
         with:
           name: TabDisplay
           path: |
+            out/TabDisplay-Setup.exe
             out/TabDisplay-win-x64.zip
             out/TabDisplay.apk
             out/TabDisplay-src.zip
@@ -112,6 +121,7 @@ jobs:
           name: TabDisplay build ${{ github.run_number }}
           prerelease: true
           files: |
+            out/TabDisplay-Setup.exe
             out/TabDisplay-win-x64.zip
             out/TabDisplay.apk
             out/TabDisplay-src.zip

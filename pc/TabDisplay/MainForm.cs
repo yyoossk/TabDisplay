@@ -22,6 +22,10 @@ public sealed class MainForm : Form
     private bool _startHidden;
     private volatile bool _usbBusy;
     private readonly HashSet<string> _autoSerials = new();
+    private ComboBox _modeBox = null!;
+    private ComboBox _sideBox = null!;
+    private CheckBox _rotateBox = null!;
+    private CheckBox _audioBox = null!;
 
     public MainForm(AppSettings settings, bool startHidden)
     {
@@ -44,11 +48,7 @@ public sealed class MainForm : Form
             Visible = true,
             ContextMenuStrip = new ContextMenuStrip(),
         };
-        _tray.ContextMenuStrip.Items.Add(L.T("tray_open"), null, (_, _) => ShowFromTray());
-        _tray.ContextMenuStrip.Items.Add(L.T("btn_connect_usb"), null, (_, _) => ConnectUsb(false));
-        _tray.ContextMenuStrip.Items.Add(L.T("btn_disconnect"), null, (_, _) => _server!.Disconnect());
-        _tray.ContextMenuStrip.Items.Add(new ToolStripSeparator());
-        _tray.ContextMenuStrip.Items.Add(L.T("tray_exit"), null, (_, _) => ExitApp());
+        BuildTrayMenu(_tray.ContextMenuStrip!);
         _tray.DoubleClick += (_, _) => ShowFromTray();
 
         _server = new Server(_s);
@@ -134,7 +134,7 @@ public sealed class MainForm : Form
         Row(buttons);
 
         // 表示のしかた
-        var mode = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 260 };
+        var mode = _modeBox = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 260 };
         mode.Items.AddRange(new object[] { L.T("mode_extend"), L.T("mode_duplicate"), L.T("mode_tablet"), L.T("mode_pc") });
         mode.SelectedIndex = (int)_s.Mode;
         mode.SelectedIndexChanged += (_, _) =>
@@ -145,7 +145,18 @@ public sealed class MainForm : Form
         };
         Row(Lbl("lbl_mode"), mode);
 
-        var rotate = new CheckBox { Text = L.T("chk_rotate"), AutoSize = true, Checked = _s.FollowRotation };
+        var side = _sideBox = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 260 };
+        side.Items.AddRange(new object[] { L.T("side_right"), L.T("side_left"), L.T("side_top"), L.T("side_bottom") });
+        side.SelectedIndex = (int)_s.Side;
+        side.SelectedIndexChanged += (_, _) =>
+        {
+            _s.Side = (TabletSide)side.SelectedIndex;
+            _s.Save();
+            _server.ApplySettings();
+        };
+        Row(Lbl("lbl_side"), side);
+
+        var rotate = _rotateBox = new CheckBox { Text = L.T("chk_rotate"), AutoSize = true, Checked = _s.FollowRotation };
         rotate.CheckedChanged += (_, _) =>
         {
             _s.FollowRotation = rotate.Checked;
@@ -202,7 +213,7 @@ public sealed class MainForm : Form
         Row(startup);
         Row(tray);
 
-        var audio = new CheckBox { Text = L.T("chk_audio"), AutoSize = true, Checked = _s.AudioToTablet };
+        var audio = _audioBox = new CheckBox { Text = L.T("chk_audio"), AutoSize = true, Checked = _s.AudioToTablet };
         audio.CheckedChanged += (_, _) => { _s.AudioToTablet = audio.Checked; _s.Save(); _server.ApplySettings(); };
         Row(audio);
         var dpi = new CheckBox { Text = L.T("chk_dpi"), AutoSize = true, Checked = _s.AutoDpi };
@@ -211,6 +222,10 @@ public sealed class MainForm : Form
         var adaptive = new CheckBox { Text = L.T("chk_adaptive"), AutoSize = true, Checked = _s.AdaptiveBitrate };
         adaptive.CheckedChanged += (_, _) => { _s.AdaptiveBitrate = adaptive.Checked; _s.Save(); };
         Row(adaptive);
+
+        var skip = new CheckBox { Text = L.T("chk_skip"), AutoSize = true, Checked = _s.SkipStatic };
+        skip.CheckedChanged += (_, _) => { _s.SkipStatic = skip.Checked; _s.Save(); _server.ApplySettings(); };
+        Row(skip);
 
         var autoUsb = new CheckBox { Text = L.T("chk_autousb"), AutoSize = true, Checked = _s.AutoConnectUsb };
         autoUsb.CheckedChanged += (_, _) => { _s.AutoConnectUsb = autoUsb.Checked; _s.Save(); };
@@ -354,6 +369,55 @@ public sealed class MainForm : Form
     }
 
     // ---------- トレイ ----------
+
+    /// <summary>右下のアイコンのメニュー：窓を開かなくても、ふだんの操作は全部ここでできる</summary>
+    private void BuildTrayMenu(ContextMenuStrip m)
+    {
+        m.Items.Add(L.T("tray_open"), null, (_, _) => ShowFromTray());
+        m.Items.Add(new ToolStripSeparator());
+        m.Items.Add(L.T("btn_connect_usb"), null, (_, _) => ConnectUsb(false));
+        m.Items.Add(L.T("btn_wifi"), null, (_, _) => { ShowFromTray(); new QrForm(_s).ShowDialog(this); });
+        var disconnect = new ToolStripMenuItem(L.T("btn_disconnect"), null, (_, _) => _server.Disconnect());
+        m.Items.Add(disconnect);
+        m.Items.Add(new ToolStripSeparator());
+
+        var modeMenu = new ToolStripMenuItem(L.T("tray_mode"));
+        string[] modeKeys = { "mode_extend", "mode_duplicate", "mode_tablet", "mode_pc" };
+        for (int i = 0; i < modeKeys.Length; i++)
+        {
+            int idx = i;
+            modeMenu.DropDownItems.Add(new ToolStripMenuItem(L.T(modeKeys[i]), null, (_, _) => _modeBox.SelectedIndex = idx));
+        }
+        m.Items.Add(modeMenu);
+
+        var sideMenu = new ToolStripMenuItem(L.T("lbl_side"));
+        string[] sideKeys = { "side_right", "side_left", "side_top", "side_bottom" };
+        for (int i = 0; i < sideKeys.Length; i++)
+        {
+            int idx = i;
+            sideMenu.DropDownItems.Add(new ToolStripMenuItem(L.T(sideKeys[i]), null, (_, _) => _sideBox.SelectedIndex = idx));
+        }
+        m.Items.Add(sideMenu);
+
+        var rotate = new ToolStripMenuItem(L.T("chk_rotate"), null, (_, _) => _rotateBox.Checked = !_rotateBox.Checked);
+        var audio = new ToolStripMenuItem(L.T("chk_audio"), null, (_, _) => _audioBox.Checked = !_audioBox.Checked);
+        m.Items.Add(rotate);
+        m.Items.Add(audio);
+        m.Items.Add(new ToolStripSeparator());
+        m.Items.Add(L.T("tray_exit"), null, (_, _) => ExitApp());
+
+        // 開くたびに今の状態をチェックに出す
+        m.Opening += (_, _) =>
+        {
+            disconnect.Enabled = _server.Connected;
+            for (int i = 0; i < modeMenu.DropDownItems.Count; i++)
+                ((ToolStripMenuItem)modeMenu.DropDownItems[i]).Checked = (int)_s.Mode == i;
+            for (int i = 0; i < sideMenu.DropDownItems.Count; i++)
+                ((ToolStripMenuItem)sideMenu.DropDownItems[i]).Checked = (int)_s.Side == i;
+            rotate.Checked = _s.FollowRotation;
+            audio.Checked = _s.AudioToTablet;
+        };
+    }
 
     private void ShowFromTray()
     {

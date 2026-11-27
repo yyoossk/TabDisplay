@@ -34,5 +34,25 @@
     <string name="opt_audio">Play the PC\'s sound</string>
     <string name="gestures">Tap: click / Long press: right click / Drag: scroll\nTwo-finger tap: right click / Pinch: zoom / Pen: pen input with pressure\n⌨ button: keyboard</string>
     <string name="notes_title">Notes</string>
-    <string name="notes">- With two or more tablets, connecting or disconnecting one stops the picture on all tablets for a few seconds.\n- When quality changes automatically, or when you rotate the tablet, the picture stops for a moment.\n- Windows of programs running as administrator on the PC cannot be operated from the tablet.\n- Pen pressure and tilt need Windows 10 (1809) or later on the PC.\n- The PC\'s sound plays here with a short delay.\n- For USB, turn on \"USB debugging\". For Wi-Fi, put the PC and tablet on the same network.\n- The screen stays on while connected, which uses more battery. Charging while you use it is recommended.</string>
+    <string name="notes">- With two or more tablets, connecting or disconnecting one stops the picture on all tablets for a few seconds.\n- When quality changes automatically, or when you rotate the tablet, the picture stops very briefly.\n- All communication is encrypted. The first Wi-Fi connection needs the QR code on the PC (it is used to verify the PC).\n- Windows of programs running as administrator on the PC cannot be operated from the tablet.\n- Pen pressure and tilt need Windows 10 (1809) or later on the PC.\n- The PC\'s sound plays here with a short delay.\n- For USB, turn on \"USB debugging\". For Wi-Fi, put the PC and tablet on the same network.\n- The screen stays on while connected, which uses more battery. Charging while you use it is recommended.</string>
+    <string name="sc_copy">Copy</string>
+    <string name="sc_paste">Paste</string>
+    <string name="sc_cut">Cut</string>
+    <string name="sc_undo">Undo</string>
+    <string name="sc_redo">Redo</string>
+    <string name="sc_selall">Select all</string>
+    <string name="sc_save">Save</string>
+    <string name="sc_alttab">Alt+Tab</string>
+    <string name="sc_start">Start</string>
+    <string name="sc_desktop">Desktop</string>
+    <string name="sc_snip">Screenshot</string>
+    <string name="sc_esc">Esc</string>
+    <string name="sc_del">Delete</string>
+    <string name="sc_enter">Enter</string>
+    <string name="shortcuts_title">Shortcut buttons</string>
+    <string name="shortcuts_help">Checked buttons are shown on the right edge (open with ☰). ↑ moves a button up.</string>
+    <string name="opt_dim">Power saving: dim the screen after 5 minutes without touching</string>
+    <string name="touchpad_on">Touchpad mode: slide to move the pointer, tap to click, two-finger tap to right click, two-finger slide to scroll, double tap and slide to drag</string>
+    <string name="touchpad_off">Touch mode</string>
+    <string name="err_tls">Could not confirm this PC. Scan the QR code on the PC again.</string>
 </resources>

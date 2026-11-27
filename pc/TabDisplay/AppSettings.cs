@@ -16,6 +16,9 @@ public enum ShowMode
     PcOnly = 3,
 }
 
+/// <summary>タブレットを PC の画面のどちら側に置くか（広げるとき）</summary>
+public enum TabletSide { Right = 0, Left = 1, Top = 2, Bottom = 3 }
+
 /// <summary>設定。%APPDATA%\TabDisplay\settings.json に保存する</summary>
 public class AppSettings
 {
@@ -38,6 +41,10 @@ public class AppSettings
     public bool AutoDpi { get; set; } = true;
     /// <summary>回線の混み具合に合わせて画質を自動で上げ下げする（BitrateMbps が上限）</summary>
     public bool AdaptiveBitrate { get; set; } = true;
+    /// <summary>タブレットの置き場所（PC の画面の右・左・上・下）</summary>
+    public TabletSide Side { get; set; } = TabletSide.Right;
+    /// <summary>省電力：画面に変化がないときは送らない</summary>
+    public bool SkipStatic { get; set; } = true;
     /// <summary>うまく動いた圧縮方式（次回はこれから試す）</summary>
     public string LastEncoder { get; set; } = "";
     /// <summary>Wi-Fi 接続の合言葉（QR に入れる）</summary>

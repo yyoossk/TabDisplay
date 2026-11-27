@@ -33,10 +33,11 @@ public sealed class QrForm : Form
             return;
         }
 
-        // tabdisplay://connect?h=IP1,IP2&p=38500&t=合言葉&n=PC名
+        // tabdisplay://connect?h=IP1,IP2&p=38500&t=合言葉&f=証明書の指紋&n=PC名
         var url = "tabdisplay://connect?h=" + string.Join(",", ips) +
                   "&p=" + s.Port +
                   "&t=" + s.Token +
+                  "&f=" + CertStore.Fingerprint +
                   "&n=" + Uri.EscapeDataString(Environment.MachineName);
 
         using var gen = new QRCodeGenerator();

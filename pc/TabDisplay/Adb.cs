@@ -110,7 +110,7 @@ public static class Adb
     {
         var name = Regex.Replace(pcName, @"[^A-Za-z0-9_\-]", "");
         if (name.Length == 0) name = "PC";
-        var cmd = $"am start -n {Package}/.DisplayActivity --es host 127.0.0.1 --ei port {port} --es token {token} --es name {name}";
+        var cmd = $"am start -n {Package}/.DisplayActivity --es host 127.0.0.1 --ei port {port} --es token {token} --es fp {CertStore.Fingerprint} --es name {name}";
         var (code, o) = Run($"-s {serial} shell {cmd}");
         return code == 0 && !o.Contains("Error");
     }

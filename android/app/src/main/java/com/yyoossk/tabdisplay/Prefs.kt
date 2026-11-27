@@ -15,6 +15,8 @@ data class Target(
     val port: Int,
     val token: String,
     val usb: Boolean = false,
+    /** PC の証明書の指紋（SHA-256）。暗号化した通信の相手が本物か確かめる */
+    val fp: String = "",
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("name", name)
@@ -22,6 +24,7 @@ data class Target(
         put("port", port)
         put("token", token)
         put("usb", usb)
+        put("fp", fp)
     }
 
     /** PC を見分ける ID（合言葉から作る。合言葉そのものは知らせに出さない）。PC 側と同じ計算 */
@@ -46,6 +49,7 @@ data class Target(
                 o.optInt("port", Protocol.PORT),
                 o.optString("token", ""),
                 o.optBoolean("usb", false),
+                o.optString("fp", ""),
             )
         }
 
@@ -58,7 +62,8 @@ data class Target(
             val token = u.getQueryParameter("t") ?: return null
             val port = u.getQueryParameter("p")?.toIntOrNull() ?: Protocol.PORT
             val name = u.getQueryParameter("n") ?: hosts[0]
-            return Target(name, hosts, port, token)
+            val fp = u.getQueryParameter("f") ?: ""
+            return Target(name, hosts, port, token, fp = fp)
         }
 
         /** PC が adb で起動したとき：am start --es host 127.0.0.1 --ei port 38500 --es token X --es name Y */
@@ -71,7 +76,8 @@ data class Target(
             val token = i.getStringExtra("token") ?: return null
             val port = i.getIntExtra("port", Protocol.PORT)
             val name = i.getStringExtra("name") ?: "PC"
-            return Target(name, listOf(host), port, token, usb = host == "127.0.0.1")
+            val fp = i.getStringExtra("fp") ?: ""
+            return Target(name, listOf(host), port, token, usb = host == "127.0.0.1", fp = fp)
         }
     }
 }
@@ -108,6 +114,29 @@ class Prefs(ctx: Context) {
     var audio: Boolean
         get() = sp.getBoolean("audio", true)
         set(v) = sp.edit().putBoolean("audio", v).apply()
+
+    /** 5 分さわらないと画面を暗くする */
+    var dim: Boolean
+        get() = sp.getBoolean("dim", true)
+        set(v) = sp.edit().putBoolean("dim", v).apply()
+
+    /** タッチパッドモード */
+    var touchpad: Boolean
+        get() = sp.getBoolean("touchpad", false)
+        set(v) = sp.edit().putBoolean("touchpad", v).apply()
+
+    /** 並べるショートカットの ID（並び順） */
+    var shortcuts: List<String>
+        get() = sp.getString("shortcuts", null)?.split(',')?.filter { it.isNotEmpty() } ?: Shortcuts.defaultIds
+        set(v) = sp.edit().putString("shortcuts", v.joinToString(",")).apply()
+
+    /** 全部のショートカットの並び順（表示しないものも含む） */
+    var shortcutOrder: List<String>
+        get() {
+            val saved = sp.getString("shortcut_order", null)?.split(',')?.filter { Shortcuts.byId(it) != null } ?: emptyList()
+            return saved + Shortcuts.all.map { it.id }.filter { it !in saved }
+        }
+        set(v) = sp.edit().putString("shortcut_order", v.joinToString(",")).apply()
 
     var haptic: Boolean
         get() = sp.getBoolean("haptic", true)

@@ -71,6 +71,35 @@ public static class InputInjector
                     if (vk != 0) Key(vk, (bool?)j["d"] ?? true);
                     break;
                 }
+                case "combo":
+                {
+                    // ショートカット：順に押して、逆の順に離す（例：Ctrl, C）
+                    var keys = (j["vks"] as JsonArray)?.Select(n => (int?)n ?? 0).Where(v => v != 0).ToList() ?? new();
+                    foreach (var vk in keys) Key(vk, true);
+                    for (int k = keys.Count - 1; k >= 0; k--) Key(keys[k], false);
+                    break;
+                }
+                case "rel":
+                {
+                    // タッチパッド：カーソルを少し動かす
+                    var i = new INPUT { type = 0, mi = new MOUSEINPUT { dx = (int?)j["dx"] ?? 0, dy = (int?)j["dy"] ?? 0, dwFlags = MOUSEEVENTF_MOVE } };
+                    SendInput(1, new[] { i }, Marshal.SizeOf<INPUT>());
+                    break;
+                }
+                case "ldown":
+                    Mouse(MOUSEEVENTF_LEFTDOWN, 0);
+                    break;
+                case "lup":
+                    Mouse(MOUSEEVENTF_LEFTUP, 0);
+                    break;
+                case "lclick":
+                    Mouse(MOUSEEVENTF_LEFTDOWN, 0);
+                    Mouse(MOUSEEVENTF_LEFTUP, 0);
+                    break;
+                case "rclick_here":
+                    Mouse(MOUSEEVENTF_RIGHTDOWN, 0);
+                    Mouse(MOUSEEVENTF_RIGHTUP, 0);
+                    break;
                 case "pen":
                     if (t != null) Pen.Handle(t, j);
                     break;

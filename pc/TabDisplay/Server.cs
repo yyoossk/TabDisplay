@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
 using System.Net;
+using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Authentication;
 using System.Text;
 using System.Text.Json.Nodes;
 
@@ -73,8 +75,11 @@ public sealed class Server : IDisposable
         {
             c.NoDelay = true;
             c.SendBufferSize = 1024 * 1024;
-            var stream = c.GetStream();
-            stream.ReadTimeout = 5000;
+            c.ReceiveTimeout = 5000;
+            // 通信は全部暗号化する（TLS）。タブレットは証明書の指紋で本物の PC か確かめる
+            var ssl = new SslStream(c.GetStream(), false);
+            ssl.AuthenticateAsServer(CertStore.Cert, false, SslProtocols.Tls12 | SslProtocols.Tls13, false);
+            Stream stream = ssl;
             var (type, data) = Protocol.Read(stream);
             if (type != Protocol.T_HELLO) return;
             var hello = Protocol.Json(data);
@@ -84,9 +89,9 @@ public sealed class Server : IDisposable
                 stream.Write(Protocol.Pack(Protocol.P_ERROR, new JsonObject { ["e"] = "token" }));
                 return;
             }
-            stream.ReadTimeout = Timeout.Infinite;
+            c.ReceiveTimeout = 0;
 
-            s = new Session(this, c, hello);
+            s = new Session(this, c, stream, hello);
             List<Session> replaced;
             lock (_lock)
             {
@@ -252,14 +257,17 @@ public sealed class Server : IDisposable
                 {
                     Displays.MakeOnlyDisplay(names);
                     Thread.Sleep(500);
-                    displays = VirtualDisplay.Refetch(names) ?? displays;
+                }
+                else
+                {
+                    Displays.PlaceVirtuals(names, _settings.Side);
                 }
                 for (int i = 0; i < list.Count; i++)
                 {
                     if (_settings.AutoDpi) DpiScale.Set(names[i], DpiScale.PercentForTablet(list[i].Dpi));
                     list[i].VirtualName = names[i];
                 }
-                if (_settings.AutoDpi) displays = VirtualDisplay.Refetch(names) ?? displays;
+                displays = VirtualDisplay.Refetch(names) ?? displays;
                 for (int i = 0; i < list.Count; i++)
                     list[i].StartCapture(displays[i], Even(displays[i].Width), Even(displays[i].Height));
                 return;
@@ -278,8 +286,7 @@ public sealed class Server : IDisposable
                 var p = Displays.Primary();
                 if (p == null) return;
                 var (w, h) = FitInto(p.Width, p.Height, s.TabW, s.TabH);
-                s.StopCapture();
-                s.StartCapture(p, w, h);
+                s.StartCapture(p, w, h); // 新しいほうが動き出してから古いほうを止める
                 return;
             }
             case ShowMode.Extend:
@@ -288,8 +295,10 @@ public sealed class Server : IDisposable
                 var name = s.VirtualName;
                 if (name == null) { RequestLayout(null); return; }
                 var (w, h) = s.WantedSize();
-                s.StopCapture();
+                // 解像度は縦横とも最初から用意してあるので、切り替えるだけ（ドライバーの再起動なし）
                 Displays.SetMode(name, w, h, _settings.Fps);
+                if (_settings.Mode == ShowMode.Extend)
+                    Displays.PlaceVirtuals(Displays.FindVirtuals().Select(x => x.DeviceName).ToList(), _settings.Side);
                 var d = VirtualDisplay.Refetch(new[] { name })?.FirstOrDefault();
                 if (d == null) { RequestLayout(null); return; }
                 s.StartCapture(d, Even(d.Width), Even(d.Height));
@@ -355,7 +364,7 @@ internal sealed class Session
     private readonly Server _server;
     private readonly AppSettings _settings;
     private readonly TcpClient _client;
-    private readonly NetworkStream _stream;
+    private readonly Stream _stream;
     private readonly object _writeLock = new();
     private readonly object _capLock = new();
     private volatile bool _closed;
@@ -370,7 +379,7 @@ internal sealed class Session
     public bool Closed => _closed;
 
     // 映像
-    private Capture? _capture;
+    private volatile Capture? _capture;
     private volatile DisplayInfo? _target;
     private readonly BlockingCollection<byte[]> _queue = new(new ConcurrentQueue<byte[]>());
     private volatile bool _dropUntilKey;
@@ -385,12 +394,12 @@ internal sealed class Session
     // 音
     private Action<byte[]>? _audioSink;
 
-    public Session(Server server, TcpClient client, JsonObject hello)
+    public Session(Server server, TcpClient client, Stream stream, JsonObject hello)
     {
         _server = server;
         _settings = server.Settings;
         _client = client;
-        _stream = client.GetStream();
+        _stream = stream;
         TabletName = (string?)hello["name"] ?? "Tablet";
         Id = (string?)hello["id"] ?? Guid.NewGuid().ToString();
         TabW = Server.Even((int?)hello["w"] ?? 1920);
@@ -475,18 +484,30 @@ internal sealed class Session
         SendStatus(status);
     }
 
+    /// <summary>
+    /// 撮り始める。前のものが動いていれば、新しいほうが絵を出せるようになってから止める（切り替えの止まりを短く）。
+    /// </summary>
     public void StartCapture(DisplayInfo target, int outW, int outH)
     {
         if (_closed) return;
         lock (_capLock)
         {
+            var old = _capture;
             _target = target;
             SendStatus("ok");
             var spec = new CaptureSpec(target.DeviceName, target.Width, target.Height, outW, outH,
-                _settings.Fps, Math.Clamp(CurrentMbps, 1, _settings.BitrateMbps));
+                _settings.Fps, Math.Clamp(CurrentMbps, 1, _settings.BitrateMbps), _settings.SkipStatic);
             var cap = new Capture(spec, _settings);
             cap.Config += (w, h, sps, pps) =>
             {
+                // 新しい絵の設定が来たら、古いほうの絵はもう送らない
+                if (!ReferenceEquals(_capture, cap))
+                {
+                    var o = _capture;
+                    _capture = cap;
+                    o?.Dispose();
+                    while (_queue.TryTake(out _)) { }
+                }
                 Send(Protocol.Pack(Protocol.P_CONFIG, new JsonObject
                 {
                     ["w"] = w,
@@ -497,16 +518,33 @@ internal sealed class Session
                 }));
                 _dropUntilKey = true;
             };
-            cap.Frame += OnFrame;
+            cap.Frame += (data, key, t) =>
+            {
+                if (ReferenceEquals(_capture, cap)) OnFrame(data, key, t);
+            };
             cap.Failed += reason =>
             {
-                if (_closed) return;
+                if (_closed || !ReferenceEquals(_capture, cap)) return;
                 Log.Write("capture failed: " + reason);
                 _server.RaiseStatus("st_capture_failed");
             };
-            _capture = cap;
+            if (old == null) _capture = cap;
             if (cap.Start())
+            {
                 _server.RaiseStatus("st_streaming", TabletName, outW, outH, cap.EncoderName ?? "");
+                if (!ReferenceEquals(_capture, cap))
+                {
+                    _capture = cap;
+                    old?.Dispose();
+                }
+            }
+            else if (old != null && !ReferenceEquals(_capture, cap))
+            {
+                // 新しいほうが動かなかった：古いほうも画面が変わって使えないので止める
+                _capture = null;
+                old.Dispose();
+                cap.Dispose();
+            }
         }
     }
 
@@ -634,6 +672,7 @@ internal sealed class Session
         if (_closed) return;
         _closed = true;
         _queue.CompleteAdding();
+        try { _stream.Dispose(); } catch { }
         try { _client.Close(); } catch { }
     }
 }
