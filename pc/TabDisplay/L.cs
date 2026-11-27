@@ -75,6 +75,16 @@ public static class L
         ["qr_browser"] = "ブラウザーで見る（アプリなし・Chrome / Edge）：このコードかアドレスを開いてください。初めは「安全ではない」と出るので「詳細 → このまま進む」を選びます",
         ["btn_hotkeys"] = "ショートカットキー",
         ["btn_changelog"] = "更新履歴",
+        ["chk_camera"] = "タブレットのカメラを PC の Web カメラにする",
+        ["cam_front"] = "前のカメラ",
+        ["cam_back"] = "後ろのカメラ",
+        ["chk_mic"] = "タブレットのマイクの音を PC で使う。鳴らす先：",
+        ["mic_auto"] = "自動（VB-CABLE があればそれ）",
+        ["cam_mic_help"] = "カメラはビデオ会議ソフトで「DirectShow Softcam」を選びます（「仮想ディスプレイを入れる」で一緒に入ります）。マイクは無料の「VB-CABLE」を入れておくと、ソフトのマイクに「CABLE Output」を選んで使えます。使うのは、いちばん先につないだタブレットです",
+        ["lbl_sleep"] = "PC を使っていないとき、タブレットの画面を消す",
+        ["sleep_off"] = "消さない",
+        ["sleep_min"] = "{0} 分後",
+        ["lbl_launcher"] = "タブレットのランチャー（▦）に並べるソフト（1 行に 1 つ。空ならタスクバーにピン留めしたソフト）",
         ["hk_title"] = "ショートカットキー",
         ["hk_help"] = "欄を選んで、使いたいキー（Ctrl・Alt・Shift のどれかと一緒に）を押してください。Delete で消します。",
         ["hk_move_window"] = "今のウィンドウを次の画面へ",
@@ -190,7 +200,8 @@ public static class L
             "・クリップボードの共有は文字だけです（画像は共有しません）。タブレット側は TabDisplay を開いている間だけ届きます。\n" +
             "・PC がロック中は、Windows の決まりで画面を撮れません。ロックを外すと自動で映し直します。\n" +
             "・ブラウザーで見るときは、操作はタップ・長押し・スクロールだけで、音は鳴りません。\n" +
-            "・PC の通知の転送は、Windows がしまっている通知を読むので、出るまで数秒かかります。",
+            "・PC の通知の転送は、Windows がしまっている通知を読むので、出るまで数秒かかります。\n" +
+            "・タブレットのカメラを使うには、この版で「仮想ディスプレイを入れる」をもう一度押してください（仮想カメラも一緒に入ります）。マイクを PC のマイクとして使うには、無料の「VB-CABLE」が要ります。",
     };
 
     private static readonly Dictionary<string, string> En = new()
@@ -244,6 +255,16 @@ public static class L
         ["qr_browser"] = "View in a browser (no app, Chrome / Edge): open this code or address. The first time, the browser warns that it is not secure; choose \"Advanced → Proceed\".",
         ["btn_hotkeys"] = "Shortcut keys",
         ["btn_changelog"] = "Change history",
+        ["chk_camera"] = "Use the tablet's camera as the PC's webcam",
+        ["cam_front"] = "Front camera",
+        ["cam_back"] = "Back camera",
+        ["chk_mic"] = "Use the tablet's microphone on the PC. Play to:",
+        ["mic_auto"] = "Automatic (VB-CABLE if installed)",
+        ["cam_mic_help"] = "For the camera, choose \"DirectShow Softcam\" in your video call app (it is installed with \"Install virtual display\"). For the microphone, install the free \"VB-CABLE\" and choose \"CABLE Output\" as the microphone. The first connected tablet is used.",
+        ["lbl_sleep"] = "Turn the tablet screen off when the PC is not used",
+        ["sleep_off"] = "Never",
+        ["sleep_min"] = "After {0} min",
+        ["lbl_launcher"] = "Programs in the tablet launcher (▦), one per line. If empty, programs pinned to the taskbar.",
         ["hk_title"] = "Shortcut keys",
         ["hk_help"] = "Select a box and press the keys to use (with Ctrl, Alt or Shift). Delete clears it.",
         ["hk_move_window"] = "Move the current window to the next screen",
@@ -359,6 +380,7 @@ public static class L
             "- Clipboard sharing is text only (no images). On the tablet it works while TabDisplay is open.\n" +
             "- While the PC is locked, Windows does not allow screen capture. The picture comes back automatically after unlocking.\n" +
             "- In a browser, only tap, long press and scroll work, and there is no sound.\n" +
-            "- PC notifications are read from Windows' notification store, so they appear a few seconds late.",
+            "- PC notifications are read from Windows' notification store, so they appear a few seconds late.\n" +
+            "- To use the tablet's camera, press \"Install virtual display\" again with this version (the virtual camera is installed with it). To use the tablet's microphone as a PC microphone, install the free \"VB-CABLE\".",
     };
 }

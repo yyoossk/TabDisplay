@@ -32,6 +32,19 @@ jobs:
         with:
           dotnet-version: "8.0.x"
 
+      - uses: microsoft/setup-msbuild@v2
+
+      - name: Build Softcam (virtual camera, MIT)
+        shell: pwsh
+        run: |
+          git clone --depth 1 https://github.com/tshino/softcam "$env:RUNNER_TEMP/softcam"
+          msbuild "$env:RUNNER_TEMP/softcam/softcam.sln" /t:softcam /p:Configuration=Release /p:Platform=x64 /m /v:minimal
+          $dll = Get-ChildItem "$env:RUNNER_TEMP/softcam" -Recurse -Filter softcam.dll | Where-Object { $_.FullName -match "x64\\Release" } | Select-Object -First 1
+          if (-not $dll) { throw "softcam.dll not built" }
+          New-Item -ItemType Directory -Force softcam-out | Out-Null
+          Copy-Item $dll.FullName softcam-out/softcam.dll
+          Copy-Item "$env:RUNNER_TEMP/softcam/LICENSE" softcam-out/softcam-LICENSE.txt
+
       - name: Build PC app
         run: >
           dotnet publish pc/TabDisplay/TabDisplay.csproj -c Release -r win-x64 --self-contained true
@@ -90,6 +103,9 @@ jobs:
           Set-Content "$out/apk/version.txt" "${{ github.run_number }}" -NoNewline
           Copy-Item $apk.FullName "out/TabDisplay.apk"
 
+          # 仮想カメラ（ソフトと同じ場所に置く）
+          Copy-Item softcam-out/softcam.dll "$out/softcam.dll"
+          Copy-Item softcam-out/softcam-LICENSE.txt "$out/licenses/"
           Copy-Item THIRD_PARTY.md "$out/licenses/"
 
       - name: Installer (Inno Setup)

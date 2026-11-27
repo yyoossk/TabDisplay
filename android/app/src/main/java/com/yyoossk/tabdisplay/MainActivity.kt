@@ -152,6 +152,21 @@ class MainActivity : Activity() {
             setOnCheckedChangeListener { _, b -> prefs.split = b }
         })
         col.addView(CheckBox(this).apply {
+            setText(R.string.opt_mini)
+            isChecked = prefs.mini
+            setOnCheckedChangeListener { _, b -> prefs.mini = b }
+        })
+        col.addView(CheckBox(this).apply {
+            setText(R.string.opt_ntouch)
+            isChecked = prefs.nativeTouch
+            setOnCheckedChangeListener { _, b -> prefs.nativeTouch = b }
+        })
+        col.addView(CheckBox(this).apply {
+            setText(R.string.opt_left)
+            isChecked = prefs.leftHanded
+            setOnCheckedChangeListener { _, b -> prefs.leftHanded = b }
+        })
+        col.addView(CheckBox(this).apply {
             setText(R.string.opt_dim)
             isChecked = prefs.dim
             setOnCheckedChangeListener { _, b -> prefs.dim = b }

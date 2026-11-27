@@ -103,6 +103,18 @@ public class AppSettings
     public bool ForwardNotifications { get; set; } = false;
     /// <summary>「PC のみ」に切り替える前の表示のしかた（キーで戻すため）</summary>
     public ShowMode ModeBeforePcOnly { get; set; } = ShowMode.Extend;
+    /// <summary>タブレットのカメラを PC の Web カメラにする</summary>
+    public bool TabletCamera { get; set; } = false;
+    /// <summary>使うカメラ（"back" / "front"）</summary>
+    public string CameraFacing { get; set; } = "front";
+    /// <summary>タブレットのマイクの音を PC で鳴らす</summary>
+    public bool TabletMic { get; set; } = false;
+    /// <summary>マイクの音を鳴らす先（空なら VB-CABLE を探す）</summary>
+    public string MicOutput { get; set; } = "";
+    /// <summary>タブレットのランチャーに並べるソフト（空ならタスクバーにピン留めしたソフト）</summary>
+    public List<string> LauncherApps { get; set; } = new();
+    /// <summary>PC を何分使わなかったらタブレットの画面を消すか（0 = 消さない）</summary>
+    public int SleepMinutes { get; set; } = 10;
     /// <summary>はじめの設定の案内をもう見た</summary>
     public bool WizardDone { get; set; } = false;
     /// <summary>最後に更新を確かめた日時</summary>

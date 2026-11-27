@@ -107,6 +107,10 @@ public static class DriverSetup
             Run("netsh.exe", $"advfirewall firewall add rule name=\"{FirewallRule}\" dir=in action=allow protocol=TCP " +
                              $"localport={AppSettings.Load().Port},{WebServer.Port} program=\"{Environment.ProcessPath}\" enable=yes profile=any", null);
 
+            // 5b. 仮想カメラ（Softcam）を登録する（タブレットのカメラを Web カメラにするため）
+            var softcam = Path.Combine(AppDir, "softcam.dll");
+            if (File.Exists(softcam)) Run("regsvr32.exe", $"/s \"{softcam}\"", null);
+
             // 6. タブレットをつなぐまでは画面を増やさない
             Thread.Sleep(2000);
             DeviceControl.Change("off");
@@ -128,6 +132,8 @@ public static class DriverSetup
             Displays.RestoreIfNeeded();
             Run(Nefcon, $"--remove-device-node --hardware-id \"{DeviceControl.HardwareId}\" --class-guid \"{{{DeviceControl.DisplayClass}}}\"", null);
             Run("schtasks.exe", $"/Delete /F /TN \"{VirtualDisplay.TaskName}\"", null);
+            var softcam = Path.Combine(AppDir, "softcam.dll");
+            if (File.Exists(softcam)) Run("regsvr32.exe", $"/u /s \"{softcam}\"", null);
             Run("netsh.exe", $"advfirewall firewall delete rule name=\"{FirewallRule}\"", null);
             return 0;
         }

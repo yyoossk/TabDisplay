@@ -12,6 +12,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.util.Base64
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
@@ -192,7 +193,10 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
         }
         root.addView(buttons, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT,
-            Gravity.BOTTOM or Gravity.END).apply { setMargins(0, 0, dp(10), dp(10)) })
+            Gravity.BOTTOM or (if (prefs.leftHanded) Gravity.START else Gravity.END)).apply {
+            // 左利きなら左下に
+            if (prefs.leftHanded) setMargins(dp(10), 0, 0, dp(10)) else setMargins(0, 0, dp(10), dp(10))
+        })
 
         // ショートカットのボタンの列（右端・☰ で出し入れ）
         sideBar = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -202,8 +206,9 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
             setBackgroundColor(0x88000000.toInt())
         }
         root.addView(sideScroll, FrameLayout.LayoutParams(
-            dp(120), FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.END or Gravity.CENTER_VERTICAL).apply {
-            setMargins(0, 0, dp(60), 0)
+            dp(120), FrameLayout.LayoutParams.WRAP_CONTENT,
+            (if (prefs.leftHanded) Gravity.START else Gravity.END) or Gravity.CENTER_VERTICAL).apply {
+            if (prefs.leftHanded) setMargins(dp(60), 0, 0, 0) else setMargins(0, 0, dp(60), 0)
         })
         buildSplitPanel()
         buildShortcuts()
@@ -222,6 +227,8 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
 
         setupTouch(video)
         setupTouch(padView)
+        buildSleepOverlay()
+        if (prefs.mini) buildMini()
         hideSystemUi()
 
         handleIntent(intent)
@@ -341,6 +348,12 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
             setOnClickListener { pickFilesToSend() }
         })
         for ((label, action) in listOf(
+            R.string.launcher_open to { openLauncher() },
+            (if (prefs.nativeTouch) R.string.ntouch_off else R.string.ntouch_on) to {
+                prefs.nativeTouch = !prefs.nativeTouch
+                Toast.makeText(this, if (prefs.nativeTouch) R.string.ntouch_on_msg else R.string.ntouch_off_msg, Toast.LENGTH_LONG).show()
+                buildShortcuts()
+            },
             R.string.shot_take to { takePicture() },
             (if (recorder != null) R.string.rec_stop else R.string.rec_start) to { toggleRecording() },
         )) {
@@ -572,7 +585,8 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
 
     // ---------- 入力専用（ペンタブレット） ----------
 
-    override fun inputOnly(): Boolean = prefs.inputOnly
+    override fun inputOnly(): Boolean = prefs.inputOnly || prefs.mini
+    override fun wantsNotify(): Boolean = prefs.mini
 
     override fun onArea(w: Int, h: Int) {
         ui.post {
@@ -665,7 +679,9 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
             }
         }
         strip.addView(scroll, LinearLayout.LayoutParams(dp(56), 0, 1f))
-        root.addView(strip, FrameLayout.LayoutParams(dp(56), FrameLayout.LayoutParams.MATCH_PARENT, Gravity.START))
+        // 左利きのときは、ボタンの列とぶつからないよう右端に
+        root.addView(strip, FrameLayout.LayoutParams(dp(56), FrameLayout.LayoutParams.MATCH_PARENT,
+            if (prefs.leftHanded) Gravity.END else Gravity.START))
     }
 
     // ---------- ゲームパッド（キーボードのキーとして送る。配置・大きさ・キーは変えられる） ----------
@@ -934,6 +950,7 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
 
     override fun onNotify(app: String, title: String, body: String) {
         ui.post {
+            addMiniNotice(app, title, body)
             val nm = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
             if (Build.VERSION.SDK_INT >= 26) {
                 nm.createNotificationChannel(android.app.NotificationChannel("pc", getString(R.string.notify_channel),
@@ -949,6 +966,233 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
                 .build()
             try { nm.notify((System.currentTimeMillis() and 0x7fffffff).toInt(), n) } catch (_: Exception) {}
         }
+    }
+
+    // ---------- タッチをそのまま Windows のタッチとして送る ----------
+
+    private fun sendNativeTouch(v: View, e: MotionEvent) {
+        val w = v.width.toFloat()
+        val h = v.height.toFloat()
+        if (w <= 0 || h <= 0) return
+        val a = JSONArray()
+        val act = e.actionMasked
+        for (i in 0 until e.pointerCount) {
+            val st = when {
+                act == MotionEvent.ACTION_CANCEL -> "u"
+                i == e.actionIndex && (act == MotionEvent.ACTION_DOWN || act == MotionEvent.ACTION_POINTER_DOWN) -> "d"
+                i == e.actionIndex && (act == MotionEvent.ACTION_UP || act == MotionEvent.ACTION_POINTER_UP) -> "u"
+                else -> "m"
+            }
+            a.put(JSONObject().put("id", e.getPointerId(i))
+                .put("x", (e.getX(i) / w).coerceIn(0f, 1f).toDouble())
+                .put("y", (e.getY(i) / h).coerceIn(0f, 1f).toDouble())
+                .put("s", st))
+        }
+        conn?.post(Protocol.T_INPUT, JSONObject().put("k", "touch").put("pts", a))
+    }
+
+    // ---------- カメラ・マイク（PC に頼まれたら送る） ----------
+
+    private var camSender: CameraSender? = null
+    private var micSender: MicSender? = null
+    private var pendingCam: String? = null
+    private var pendingMic = false
+
+    override fun onCamera(on: Boolean, facing: String) {
+        ui.post {
+            camSender?.stop(); camSender = null
+            if (!on) return@post
+            val c = conn ?: return@post
+            if (checkSelfPermission(android.Manifest.permission.CAMERA) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                pendingCam = facing
+                requestPermissions(arrayOf(android.Manifest.permission.CAMERA), REQ_CAM)
+                return@post
+            }
+            camSender = CameraSender(this, c, facing).also { it.start() }
+            Toast.makeText(this, R.string.cam_started, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    override fun onMic(on: Boolean) {
+        ui.post {
+            micSender?.stop(); micSender = null
+            if (!on) return@post
+            val c = conn ?: return@post
+            if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                pendingMic = true
+                requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), REQ_MIC)
+                return@post
+            }
+            micSender = MicSender(c).also { it.start() }
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        val ok = grantResults.isNotEmpty() && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (requestCode == REQ_CAM && ok) pendingCam?.let { onCamera(true, it) }
+        if (requestCode == REQ_MIC && ok && pendingMic) onMic(true)
+        pendingCam = null
+        pendingMic = false
+    }
+
+    // ---------- ランチャー（PC のソフトを開く） ----------
+
+    private fun openLauncher() {
+        sideScroll.visibility = View.GONE
+        conn?.post(Protocol.T_APPS_REQ)
+    }
+
+    override fun onApps(items: JSONArray) {
+        ui.post {
+            if (items.length() == 0) {
+                Toast.makeText(this, R.string.launcher_empty, Toast.LENGTH_LONG).show()
+                return@post
+            }
+            val grid = android.widget.GridLayout(this).apply { columnCount = 4 }
+            var dlg: android.app.AlertDialog? = null
+            for (i in 0 until items.length()) {
+                val o = items.getJSONObject(i)
+                val cell = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                    gravity = Gravity.CENTER
+                    setPadding(dp(8), dp(8), dp(8), dp(8))
+                    val icon = o.optString("icon", "")
+                    if (icon.isNotEmpty() && icon != "null") {
+                        val b = Base64.decode(icon, Base64.NO_WRAP)
+                        addView(android.widget.ImageView(this@DisplayActivity).apply {
+                            setImageBitmap(android.graphics.BitmapFactory.decodeByteArray(b, 0, b.size))
+                        }, LinearLayout.LayoutParams(dp(48), dp(48)))
+                    }
+                    addView(TextView(this@DisplayActivity).apply {
+                        text = o.optString("name")
+                        gravity = Gravity.CENTER
+                        maxLines = 2
+                        setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                    }, LinearLayout.LayoutParams(dp(80), LinearLayout.LayoutParams.WRAP_CONTENT))
+                    setOnClickListener {
+                        conn?.post(Protocol.T_LAUNCH, JSONObject().put("id", o.optInt("id")))
+                        dlg?.dismiss()
+                    }
+                }
+                grid.addView(cell)
+            }
+            dlg = android.app.AlertDialog.Builder(this)
+                .setTitle(R.string.launcher_open)
+                .setView(ScrollView(this).apply { addView(grid) })
+                .setNegativeButton(R.string.guide_close, null)
+                .show()
+        }
+    }
+
+    // ---------- つないだまま画面を消す（PC が使われていないとき） ----------
+
+    private lateinit var sleepView: View
+    private var sleeping = false
+
+    private fun buildSleepOverlay() {
+        sleepView = View(this).apply {
+            setBackgroundColor(Color.BLACK)
+            visibility = View.GONE
+            isClickable = true
+            setOnTouchListener { _, e ->
+                // さわったら起こす（PC も起こす）
+                if (e.actionMasked == MotionEvent.ACTION_DOWN) {
+                    setSleep(false)
+                    conn?.post(Protocol.T_INPUT, JSONObject().put("k", "rel").put("dx", 1).put("dy", 0))
+                    conn?.post(Protocol.T_INPUT, JSONObject().put("k", "rel").put("dx", -1).put("dy", 0))
+                }
+                true
+            }
+        }
+        root.addView(sleepView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+    }
+
+    override fun onSleep(on: Boolean) {
+        ui.post { setSleep(on) }
+    }
+
+    private fun setSleep(on: Boolean) {
+        if (sleeping == on) return
+        sleeping = on
+        sleepView.visibility = if (on) View.VISIBLE else View.GONE
+        sleepView.bringToFront()
+        window.attributes = window.attributes.apply {
+            screenBrightness = if (on) 0.01f else if (prefs.brightness < 0) WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE else prefs.brightness / 100f
+        }
+    }
+
+    // ---------- ミニ画面（スマホ向け：時計・PC の通知・ショートカット） ----------
+
+    private var miniList: LinearLayout? = null
+    private var miniClock: TextView? = null
+    private var miniDate: TextView? = null
+
+    private fun buildMini() {
+        val col = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(0xFF101418.toInt())
+            setPadding(dp(16), dp(16), dp(16), dp(16))
+            isClickable = true
+        }
+        miniClock = TextView(this).apply {
+            setTextColor(Color.WHITE)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 64f)
+            gravity = Gravity.CENTER
+        }
+        miniDate = TextView(this).apply {
+            setTextColor(Color.LTGRAY)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
+            gravity = Gravity.CENTER
+        }
+        col.addView(miniClock)
+        col.addView(miniDate)
+        // ショートカットのボタン
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        for (id in prefs.shortcuts) {
+            val item = Shortcuts.byId(id) ?: continue
+            row.addView(TextView(this).apply {
+                setText(item.label)
+                setTextColor(Color.WHITE)
+                setBackgroundColor(0x33FFFFFF)
+                setPadding(dp(14), dp(12), dp(14), dp(12))
+                setOnClickListener {
+                    val a = JSONArray()
+                    item.vks.forEach { a.put(it) }
+                    conn?.post(Protocol.T_INPUT, JSONObject().put("k", "combo").put("vks", a))
+                }
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                setMargins(dp(4), dp(12), dp(4), dp(4))
+            })
+        }
+        col.addView(HorizontalScrollView(this).apply { addView(row) })
+        col.addView(TextView(this).apply {
+            setText(R.string.mini_notify)
+            setTextColor(Color.GRAY)
+            setPadding(0, dp(12), 0, dp(4))
+        })
+        miniList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        col.addView(ScrollView(this).apply { addView(miniList) }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+        root.addView(col, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        val tick = object : Runnable {
+            override fun run() {
+                val now = java.util.Date()
+                miniClock?.text = java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(now)
+                miniDate?.text = java.text.DateFormat.getDateInstance(java.text.DateFormat.FULL).format(now)
+                ui.postDelayed(this, 1000)
+            }
+        }
+        tick.run()
+    }
+
+    private fun addMiniNotice(app: String, title: String, body: String) {
+        val list = miniList ?: return
+        list.addView(TextView(this).apply {
+            text = (if (app.isNotEmpty()) "[$app] " else "") + title + if (body.isNotEmpty()) "\n" + body else ""
+            setTextColor(Color.WHITE)
+            setPadding(0, dp(8), 0, dp(8))
+        }, 0)
+        while (list.childCount > 30) list.removeViewAt(list.childCount - 1)
     }
 
     // ---------- 接続 ----------
@@ -1160,6 +1404,10 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
             touchView = v
             if (magOn && v === video && !isPen(e)) {
                 handleMagnify(v, e)
+                return@setOnTouchListener true
+            }
+            if (prefs.nativeTouch && !prefs.touchpad && !isPen(e)) {
+                sendNativeTouch(v, e)
                 return@setOnTouchListener true
             }
             if (prefs.touchpad && !isPen(e)) {
@@ -1483,6 +1731,8 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
     override fun onDestroy() {
         ui.removeCallbacksAndMessages(null)
         Discovery.stop()
+        camSender?.stop(); camSender = null
+        micSender?.stop(); micSender = null
         recorder?.let { r -> recorder = null; Thread { r.stop() }.start() }
         try { clipboard.removePrimaryClipChangedListener(clipListener) } catch (_: Exception) {}
         receiving.values.forEach { it.finish() }
@@ -1503,6 +1753,8 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
 
     companion object {
         private const val REQ_SEND_FILES = 7
+        private const val REQ_CAM = 8
+        private const val REQ_MIC = 9
         /** 画面を分けるとき、PC の画面に使う高さ（%） */
         private const val SPLIT = 65
     }

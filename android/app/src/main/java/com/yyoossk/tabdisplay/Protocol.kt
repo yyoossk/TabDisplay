@@ -30,6 +30,12 @@ object Protocol {
     const val T_FILE_BEGIN = 30 // JSON: id, name, size
     const val T_FILE_DATA = 31  // [id 4 バイト][中身]
     const val T_FILE_END = 32   // JSON: id
+    const val T_CAM_CONFIG = 33 // JSON: w, h, sps, pps（タブレットのカメラ）
+    const val T_CAM_VIDEO = 34  // [時刻 8][フラグ 1][H.264]
+    const val T_MIC_CFG = 35    // JSON: rate, ch（タブレットのマイク）
+    const val T_MIC = 36        // PCM 16bit
+    const val T_APPS_REQ = 37   // ランチャーの一覧がほしい
+    const val T_LAUNCH = 38     // JSON: id
 
     // PC → タブレット
     const val P_CONFIG = 10    // JSON: w, h, fps, sps, pps（base64）, name
@@ -45,6 +51,10 @@ object Protocol {
     const val P_FILE_BEGIN = 40
     const val P_FILE_DATA = 41
     const val P_FILE_END = 42
+    const val P_CAM = 43       // JSON: on, facing（カメラを使う／やめる）
+    const val P_MIC = 44       // JSON: on
+    const val P_APPS = 45      // JSON: items[{id, name, icon(base64 PNG)}]
+    const val P_SLEEP = 46     // JSON: on（PC が使われていない：画面を消す）
 
     /** PC が Wi-Fi に出す「ここにいます」の知らせ（UDP ブロードキャスト） */
     const val DISCOVERY_PORT = 38501

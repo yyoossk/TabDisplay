@@ -159,6 +159,21 @@ class Prefs(ctx: Context) {
         get() = sp.getInt("contrast", 100)
         set(v) = sp.edit().putInt("contrast", v).apply()
 
+    /** ミニ画面（スマホ向け：時計・PC の通知・ショートカット） */
+    var mini: Boolean
+        get() = sp.getBoolean("mini", false)
+        set(v) = sp.edit().putBoolean("mini", v).apply()
+
+    /** 左利き：ボタンを左側に */
+    var leftHanded: Boolean
+        get() = sp.getBoolean("left", false)
+        set(v) = sp.edit().putBoolean("left", v).apply()
+
+    /** タッチを Windows のタッチとしてそのまま送る */
+    var nativeTouch: Boolean
+        get() = sp.getBoolean("ntouch", false)
+        set(v) = sp.edit().putBoolean("ntouch", v).apply()
+
     /** タッチパッドモード */
     var touchpad: Boolean
         get() = sp.getBoolean("touchpad", false)

@@ -46,6 +46,11 @@ class Connection(
         fun onFileData(id: Int, data: ByteArray)
         fun onFileEnd(id: Int)
         fun onNotify(app: String, title: String, body: String)
+        fun onCamera(on: Boolean, facing: String)
+        fun onMic(on: Boolean)
+        fun onApps(items: org.json.JSONArray)
+        fun onSleep(on: Boolean)
+        fun wantsNotify(): Boolean
         fun contrast(): Double
     }
 
@@ -199,6 +204,13 @@ class Connection(
                     listener.onAudioConfig(j.optInt("rate", 48000), j.optInt("ch", 2))
                 }
                 Protocol.P_AUDIO -> listener.onAudio(m.data)
+                Protocol.P_CAM -> {
+                    val j = JSONObject(String(m.data, Charsets.UTF_8))
+                    listener.onCamera(j.optBoolean("on"), j.optString("facing", "front"))
+                }
+                Protocol.P_MIC -> listener.onMic(JSONObject(String(m.data, Charsets.UTF_8)).optBoolean("on"))
+                Protocol.P_APPS -> listener.onApps(JSONObject(String(m.data, Charsets.UTF_8)).optJSONArray("items") ?: org.json.JSONArray())
+                Protocol.P_SLEEP -> listener.onSleep(JSONObject(String(m.data, Charsets.UTF_8)).optBoolean("on"))
                 Protocol.P_NOTIFY -> {
                     val j = JSONObject(String(m.data, Charsets.UTF_8))
                     listener.onNotify(j.optString("app"), j.optString("title"), j.optString("body"))
@@ -238,6 +250,7 @@ class Connection(
         j.put("inputOnly", listener.inputOnly())
         j.put("hevc", VideoDecoder.canHevc(w, h))
         j.put("contrast", listener.contrast())
+        j.put("notify", listener.wantsNotify())
         j.put("name", (Build.MANUFACTURER + " " + Build.MODEL).trim())
         j.put("w", w)
         j.put("h", h)

@@ -124,7 +124,7 @@ public sealed class MainForm : Form
             });
         };
         // PC の通知をタブレットへ
-        _notify = new NotificationWatcher(() => _s.ForwardNotifications && _server.Connected,
+        _notify = new NotificationWatcher(() => (_s.ForwardNotifications || _server.AnyWantsNotify) && _server.Connected,
             (app, title, body) => _server.BroadcastNotify(app, title, body));
         Shown += (_, _) => AfterShown();
         if (_startHidden) Task.Delay(3000).ContinueWith(_ => Ui(AfterShown));
@@ -329,6 +329,37 @@ public sealed class MainForm : Form
         clip.CheckedChanged += (_, _) => { _s.ShareClipboard = clip.Checked; _s.Save(); };
         Row(clip);
 
+        // タブレットのカメラ・マイク（いちばん先につないだタブレット）
+        var cam = new CheckBox { Text = L.T("chk_camera"), AutoSize = true, Checked = _s.TabletCamera };
+        var facing = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160 };
+        facing.Items.AddRange(new object[] { L.T("cam_front"), L.T("cam_back") });
+        facing.SelectedIndex = _s.CameraFacing == "back" ? 1 : 0;
+        cam.CheckedChanged += (_, _) => { _s.TabletCamera = cam.Checked; _s.Save(); _server.ApplyDevices(); };
+        facing.SelectedIndexChanged += (_, _) => { _s.CameraFacing = facing.SelectedIndex == 1 ? "back" : "front"; _s.Save(); _server.ApplyDevices(); };
+        Row(cam, facing);
+        var mic = new CheckBox { Text = L.T("chk_mic"), AutoSize = true, Checked = _s.TabletMic };
+        var micOut = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 260 };
+        micOut.Items.Add(L.T("mic_auto"));
+        foreach (var d in MicBridge.OutputDevices()) micOut.Items.Add(d);
+        micOut.SelectedItem = _s.MicOutput.Length > 0 && micOut.Items.Contains(_s.MicOutput) ? _s.MicOutput : micOut.Items[0];
+        mic.CheckedChanged += (_, _) => { _s.TabletMic = mic.Checked; _s.Save(); _server.ApplyDevices(); };
+        micOut.SelectedIndexChanged += (_, _) =>
+        {
+            _s.MicOutput = micOut.SelectedIndex <= 0 ? "" : (string)micOut.SelectedItem!;
+            _s.Save();
+            _server.ApplyDevices();
+        };
+        Row(mic, micOut);
+        Row(new Label { Text = L.T("cam_mic_help"), AutoSize = true, ForeColor = Color.DimGray, MaximumSize = new Size(540, 0) });
+
+        // つないだまま画面を消す
+        var sleep = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160 };
+        int[] mins = { 0, 5, 10, 15, 30, 60 };
+        foreach (var m in mins) sleep.Items.Add(m == 0 ? L.T("sleep_off") : string.Format(L.T("sleep_min"), m));
+        sleep.SelectedIndex = Math.Max(0, Array.IndexOf(mins, _s.SleepMinutes));
+        sleep.SelectedIndexChanged += (_, _) => { _s.SleepMinutes = mins[sleep.SelectedIndex]; _s.Save(); };
+        Row(Lbl("lbl_sleep"), sleep);
+
         var autoUsb = new CheckBox { Text = L.T("chk_autousb"), AutoSize = true, Checked = _s.AutoConnectUsb };
         autoUsb.CheckedChanged += (_, _) => { _s.AutoConnectUsb = autoUsb.Checked; _s.Save(); };
         Row(autoUsb);
@@ -349,6 +380,17 @@ public sealed class MainForm : Form
             SaveApps();
         };
         Row(browse);
+
+        // タブレットのランチャーに並べるソフト
+        Row(new Label { Text = L.T("lbl_launcher"), AutoSize = true, Margin = new Padding(3, 10, 3, 3), MaximumSize = new Size(540, 0) });
+        var launcher = new TextBox { Multiline = true, Width = 520, Height = 60, ScrollBars = ScrollBars.Vertical,
+            Text = string.Join(Environment.NewLine, _s.LauncherApps) };
+        launcher.Leave += (_, _) =>
+        {
+            _s.LauncherApps = launcher.Lines.Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
+            _s.Save();
+        };
+        Row(launcher);
 
         // 設定の組み合わせ
         var prof = _profileBox = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 200 };
@@ -887,6 +929,7 @@ public sealed class MainForm : Form
         _exiting = true;
         _usbTimer.Stop();
         _notify?.Dispose();
+        CameraBridge.Shutdown();
         Usage.Save();
         _server.Dispose();
         // 切断の片付け（画面を戻す）が終わるのを少し待つ

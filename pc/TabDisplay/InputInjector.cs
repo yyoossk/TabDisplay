@@ -105,6 +105,9 @@ public static class InputInjector
                     Mouse(MOUSEEVENTF_RIGHTDOWN, 0);
                     Mouse(MOUSEEVENTF_RIGHTUP, 0);
                     break;
+                case "touch":
+                    if (t != null && j["pts"] is JsonArray pts) TouchInput.Handle(t, pts);
+                    break;
                 case "pen":
                     if (t != null) PenInput.Handle(t, j);
                     break;

@@ -40,6 +40,35 @@ public sealed class Server : IDisposable
     internal void RaiseClip(string s) => ClipReceived?.Invoke(s);
     internal void RaiseFile(string path) => FileReceived?.Invoke(path);
 
+    /// <summary>カメラ・マイクを使うタブレット（いちばん先につないだもの）に、オン／オフを知らせる</summary>
+    public void ApplyDevices()
+    {
+        var list = Snapshot();
+        for (int i = 0; i < list.Count; i++) list[i].SetDevices(i == 0);
+    }
+
+    /// <summary>ミニ画面などで、通知をほしがっているタブレットがある</summary>
+    public bool AnyWantsNotify => Snapshot().Any(s => s.WantsNotify);
+
+    private bool _asleep;
+
+    /// <summary>PC が使われていない間は、タブレットの画面を消す</summary>
+    private void SleepTick(List<Session> list)
+    {
+        if (list.Count == 0) { _asleep = false; return; }
+        var idle = Idle.Time;
+        if (!_asleep && _settings.SleepMinutes > 0 && idle.TotalMinutes >= _settings.SleepMinutes)
+        {
+            _asleep = true;
+            foreach (var s in list) s.SendSleep(true);
+        }
+        else if (_asleep && idle.TotalSeconds < 3)
+        {
+            _asleep = false;
+            foreach (var s in list) s.SendSleep(false);
+        }
+    }
+
     /// <summary>PC の通知を全部のタブレットへ</summary>
     public void BroadcastNotify(string app, string title, string body)
     {
@@ -182,6 +211,7 @@ public sealed class Server : IDisposable
             foreach (var r in replaced) r.Close();
             ConnectedChanged?.Invoke(true);
             RequestLayout(null);
+            ApplyDevices();
             s.Run();
         }
         catch (Exception e)
@@ -203,9 +233,11 @@ public sealed class Server : IDisposable
                 }
                 s.StopCapture();
                 s.StopAudio();
+                s.StopDevices();
                 if (removed)
                 {
                     RequestLayout(null);
+                    ApplyDevices();
                     if (left == 0)
                     {
                         ConnectedChanged?.Invoke(false);
@@ -487,6 +519,7 @@ public sealed class Server : IDisposable
                 catch { }
             }
             var sb = new StringBuilder();
+            SleepTick(list);
             // 使用時間・通信量の記録（つないでいる間）
             if (list.Count > 0)
             {
@@ -554,6 +587,9 @@ internal sealed class Session
     public bool Closed => _closed;
     /// <summary>入力専用（映像なし・ペンタブレットとして使う）</summary>
     public volatile bool InputOnly;
+    /// <summary>通知がほしい（ミニ画面）</summary>
+    public bool WantsNotify;
+    private bool _devicesOn;
     /// <summary>タブレットが H.265 を再生できる</summary>
     public bool CanHevc;
     /// <summary>コントラスト（1.0 = そのまま）。タブレットの設定</summary>
@@ -598,6 +634,7 @@ internal sealed class Session
         InputOnly = (bool?)hello["inputOnly"] ?? false;
         CanHevc = (bool?)hello["hevc"] ?? false;
         Contrast = (double?)hello["contrast"] ?? 1.0;
+        WantsNotify = (bool?)hello["notify"] ?? false;
         CurrentMbps = _settings.BitrateMbps;
         _lastRateChange = Environment.TickCount64;
         Log.Write($"tablet {TabletName} {TabW}x{TabH} dpi {Dpi} from {client.Client.RemoteEndPoint}");
@@ -715,10 +752,92 @@ internal sealed class Session
                     }
                     break;
                 }
+                case Protocol.T_CAM_CONFIG:
+                {
+                    var j = Protocol.Json(data);
+                    var sps = Convert.FromBase64String((string?)j["sps"] ?? "");
+                    var pps = Convert.FromBase64String((string?)j["pps"] ?? "");
+                    if (sps.Length > 0 && pps.Length > 0) CameraBridge.Start(Id, sps, pps);
+                    break;
+                }
+                case Protocol.T_CAM_VIDEO:
+                    if (data.Length > 9) CameraBridge.Feed(Id, data.AsSpan(9).ToArray());
+                    break;
+                case Protocol.T_MIC_CFG:
+                {
+                    var j = Protocol.Json(data);
+                    MicBridge.Start(Id, (int?)j["rate"] ?? 48000, (int?)j["ch"] ?? 1, _settings.MicOutput);
+                    break;
+                }
+                case Protocol.T_MIC:
+                    MicBridge.Feed(Id, data);
+                    break;
+                case Protocol.T_APPS_REQ:
+                    SendApps();
+                    break;
+                case Protocol.T_LAUNCH:
+                {
+                    var j = Protocol.Json(data);
+                    var items = Launcher.Items(_settings);
+                    var i = (int?)j["id"] ?? -1;
+                    if (i >= 0 && i < items.Count)
+                    {
+                        var cmd = items[i];
+                        var name = VirtualName;
+                        Task.Run(() =>
+                        {
+                            if (name != null) Win.LaunchOn(cmd, name);
+                            else
+                            {
+                                var (exe, args) = Win.SplitCommand(cmd);
+                                try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe, args) { UseShellExecute = true }); }
+                                catch (Exception e) { Log.Write("launch: " + e.Message); }
+                            }
+                        });
+                    }
+                    break;
+                }
                 case Protocol.T_BYE:
                     return;
             }
         }
+    }
+
+    // ---------- カメラ・マイク・ランチャー・スリープ ----------
+
+    /// <summary>このタブレットのカメラ・マイクを使うかどうかを知らせる（use = いちばん先につないだタブレット）</summary>
+    public void SetDevices(bool use)
+    {
+        bool cam = use && _settings.TabletCamera && CameraBridge.Available;
+        bool mic = use && _settings.TabletMic;
+        Send(Protocol.Pack(Protocol.P_CAM, new JsonObject { ["on"] = cam, ["facing"] = _settings.CameraFacing }));
+        Send(Protocol.Pack(Protocol.P_MIC, new JsonObject { ["on"] = mic }));
+        if (!cam) CameraBridge.Stop(Id);
+        if (!mic) MicBridge.Stop(Id);
+        _devicesOn = cam || mic;
+    }
+
+    public void StopDevices()
+    {
+        CameraBridge.Stop(Id);
+        MicBridge.Stop(Id);
+    }
+
+    public void SendSleep(bool on) => Send(Protocol.Pack(Protocol.P_SLEEP, new JsonObject { ["on"] = on }));
+
+    private void SendApps()
+    {
+        Task.Run(() =>
+        {
+            var arr = new JsonArray();
+            var items = Launcher.Items(_settings);
+            for (int i = 0; i < items.Count && i < 60; i++)
+            {
+                var (name, icon) = Launcher.Describe(items[i]);
+                arr.Add(new JsonObject { ["id"] = i, ["name"] = name, ["icon"] = icon != null ? Convert.ToBase64String(icon) : null });
+            }
+            Send(Protocol.Pack(Protocol.P_APPS, new JsonObject { ["items"] = arr }));
+        });
     }
 
     // ---------- クリップボード・ファイル ----------
