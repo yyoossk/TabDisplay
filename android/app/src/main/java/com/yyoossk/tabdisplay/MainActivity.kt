@@ -128,6 +128,9 @@ class MainActivity : Activity() {
         }
         col.addView(group)
 
+        col.addView(title(R.string.notes_title))
+        col.addView(body(getString(R.string.notes)).apply { alpha = 0.75f })
+
         setContentView(ScrollView(this).apply { addView(col) })
     }
 

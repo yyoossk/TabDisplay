@@ -81,6 +81,16 @@ public static class L
         ["driver_yes"] = "仮想ディスプレイ：導入済み",
         ["lang_restart"] = "言語は次に起動したときから変わります",
         ["port_busy"] = "ポート {0} が使えません。ほかの TabDisplay が開いていないか確かめてください",
+        ["notes_title"] = "注意",
+        ["notes"] =
+            "・タブレットを 2 台以上つないでいるときに、1 台つないだり外したりすると、全部のタブレットの映像が数秒止まります（画面を組み直すため）。\n" +
+            "・画質の自動調整で画質が変わるとき、そのタブレットの映像が一瞬止まります（6 秒に 1 回まで）。\n" +
+            "・タブレットを回したときも、そのタブレットの映像が一瞬止まります。\n" +
+            "・管理者として動いているソフトの窓は、タブレットから操作できません（Windows の決まり）。\n" +
+            "・ペンの筆圧・傾きは Windows 10（1809）以降で使えます。それより前はマウスの代わりになります。\n" +
+            "・PC の音は、タブレットで少し遅れて鳴ります。PC 側のスピーカーからも鳴ったままです。\n" +
+            "・USB でつなぐには、タブレットの「USB デバッグ」をオンにしておく必要があります。\n" +
+            "・「タブレットのみ」で切断したときは、PC の画面を自動で元に戻します。",
     };
 
     private static readonly Dictionary<string, string> En = new()
@@ -140,5 +150,15 @@ public static class L
         ["driver_yes"] = "Virtual display: installed",
         ["lang_restart"] = "The language changes the next time you start the app",
         ["port_busy"] = "Port {0} is in use. Check that TabDisplay is not already open.",
+        ["notes_title"] = "Notes",
+        ["notes"] =
+            "- With two or more tablets, connecting or disconnecting one stops the picture on all tablets for a few seconds (the screens are rebuilt).\n" +
+            "- When automatic quality changes the quality, that tablet's picture stops for a moment (at most once every 6 seconds).\n" +
+            "- Rotating a tablet also stops that tablet's picture for a moment.\n" +
+            "- Windows of programs running as administrator cannot be operated from the tablet (a Windows rule).\n" +
+            "- Pen pressure and tilt need Windows 10 (1809) or later. On older Windows the pen works as a mouse.\n" +
+            "- The PC's sound plays on the tablet with a short delay, and still plays from the PC speakers.\n" +
+            "- To connect with USB, \"USB debugging\" must be on on the tablet.\n" +
+            "- In \"Tablet only\", the PC screens are restored automatically when the tablet disconnects.",
     };
 }
