@@ -11,7 +11,7 @@ public sealed class MainForm : Form
     private readonly Server _server;
     private readonly NotifyIcon _tray;
     private readonly Label _status = new() { AutoSize = true, MaximumSize = new Size(520, 0) };
-    private readonly Label _stats = new() { AutoSize = true, ForeColor = Color.DimGray, MaximumSize = new Size(520, 0) };
+    private readonly Label _stats = new() { AutoSize = true, ForeColor = Theme.DimColor, MaximumSize = new Size(520, 0) };
     private readonly Label _driver = new() { AutoSize = true };
     private readonly Button _btnUsb = new();
     private readonly Button _btnWifi = new();
@@ -41,6 +41,7 @@ public sealed class MainForm : Form
 
     public MainForm(AppSettings settings, bool startHidden)
     {
+        Load += (_, _) => Theme.Apply(this); // 見た目（theme.json で差し替え）
         _s = settings;
         _startHidden = startHidden;
         Text = L.T("title");
@@ -373,7 +374,7 @@ public sealed class MainForm : Form
             _server.ApplyDevices();
         };
         Row(mic, micOut);
-        Row(new Label { Text = L.T("cam_mic_help"), AutoSize = true, ForeColor = Color.DimGray, MaximumSize = new Size(540, 0) });
+        Row(new Label { Text = L.T("cam_mic_help"), AutoSize = true, ForeColor = Theme.DimColor, MaximumSize = new Size(540, 0) });
 
         p = tConnect;
         // つないだまま画面を消す
@@ -423,7 +424,7 @@ public sealed class MainForm : Form
         pin.KeyPress += (_, e) => { if (!char.IsDigit(e.KeyChar) && !char.IsControl(e.KeyChar)) e.Handled = true; };
         pin.Leave += (_, _) => { _s.Pin = pin.Text.Trim(); _s.Save(); };
         Row(Lbl("lbl_pin"), pin);
-        Row(new Label { Text = L.T("pin_help"), AutoSize = true, ForeColor = Color.DimGray, MaximumSize = new Size(540, 0) });
+        Row(new Label { Text = L.T("pin_help"), AutoSize = true, ForeColor = Theme.DimColor, MaximumSize = new Size(540, 0) });
 
         // 設定の組み合わせ
         var prof = _profileBox = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 200 };
@@ -457,8 +458,8 @@ public sealed class MainForm : Form
         profRow.Controls.AddRange(new Control[] { prof, saveProf, delProf });
         Row(Lbl("lbl_profile"), profRow);
 
-        Row(new Label { Text = L.T("drop_hint"), AutoSize = true, ForeColor = Color.DimGray, MaximumSize = new Size(540, 0) });
-        Row(new Label { Text = L.T("hotkey_help"), AutoSize = true, ForeColor = Color.DimGray, MaximumSize = new Size(540, 0) });
+        Row(new Label { Text = L.T("drop_hint"), AutoSize = true, ForeColor = Theme.DimColor, MaximumSize = new Size(540, 0) });
+        Row(new Label { Text = L.T("hotkey_help"), AutoSize = true, ForeColor = Theme.DimColor, MaximumSize = new Size(540, 0) });
 
         Row(_driver);
         var tools = new FlowLayoutPanel { AutoSize = true, WrapContents = true, MaximumSize = new Size(540, 0) };
@@ -492,6 +493,24 @@ public sealed class MainForm : Form
             });
         }));
         tools.Controls.Add(Btn("btn_changelog", ShowChangelog));
+        tools.Controls.Add(Btn("btn_export", () =>
+        {
+            using var d = new SaveFileDialog { FileName = "TabDisplay-settings.json", Filter = "JSON|*.json" };
+            if (d.ShowDialog(this) != DialogResult.OK) return;
+            SaveApps();
+            _s.Export(d.FileName);
+            _status.Text = L.T("export_done");
+        }));
+        tools.Controls.Add(Btn("btn_import", () =>
+        {
+            using var d = new OpenFileDialog { Filter = "JSON|*.json" };
+            if (d.ShowDialog(this) != DialogResult.OK) return;
+            if (!AppSettings.Import(d.FileName)) { _status.Text = L.T("import_failed"); return; }
+            // 読み込んだ設定で開き直す
+            MessageBox.Show(this, L.T("import_done"), Text);
+            Process.Start(new ProcessStartInfo(Environment.ProcessPath!) { UseShellExecute = true });
+            ExitApp();
+        }));
         tools.Controls.Add(Btn("btn_update", () => CheckUpdate(quiet: false)));
         tools.Controls.Add(Btn("btn_hotkeys", () =>
         {
@@ -520,7 +539,7 @@ public sealed class MainForm : Form
         // 注意書き
         var notesTitle = new Label { Text = L.T("notes_title"), AutoSize = true, Font = new Font(Font, FontStyle.Bold), Margin = new Padding(3, 12, 3, 3) };
         Row(notesTitle);
-        Row(new Label { Text = L.T("notes"), AutoSize = true, MaximumSize = new Size(540, 0), ForeColor = Color.DimGray });
+        Row(new Label { Text = L.T("notes"), AutoSize = true, MaximumSize = new Size(540, 0), ForeColor = Theme.DimColor });
     }
 
     private bool _afterShownDone;

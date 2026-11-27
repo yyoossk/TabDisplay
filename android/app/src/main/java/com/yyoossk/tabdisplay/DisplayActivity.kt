@@ -117,6 +117,8 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = Prefs(this)
+        Theme.init(this)
+        CrashLog.install(this)
         BuildConfigCompat.versionCode = try {
             @Suppress("DEPRECATION")
             packageManager.getPackageInfo(packageName, 0).versionCode
@@ -137,7 +139,7 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
         root.addView(video, FrameLayout.LayoutParams(1, 1, Gravity.CENTER))
         // 入力専用（ペンタブレット）のときの面。PC の画面と同じ縦横比の灰色の板
         padView = View(this).apply {
-            setBackgroundColor(0xFF37474F.toInt())
+            setBackgroundColor(Theme.surface)
             visibility = View.GONE
         }
         root.addView(padView, FrameLayout.LayoutParams(1, 1, Gravity.CENTER))
@@ -155,7 +157,7 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
         statsView = TextView(this).apply {
             setTextColor(Color.YELLOW)
-            setBackgroundColor(0x80000000.toInt())
+            setBackgroundColor(Theme.statsBg)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
             setPadding(dp(6), dp(2), dp(6), dp(2))
             visibility = View.GONE
@@ -170,7 +172,7 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
             text = label
             setTextColor(Color.WHITE)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
-            setBackgroundColor(0x66000000)
+            setBackgroundColor(Theme.buttonBg)
             gravity = Gravity.CENTER
             alpha = 0.6f
             setOnClickListener { onClick() }
@@ -197,7 +199,7 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
             applySplit()
         }
         for (b in listOf(menuButton, magButton, splitButton, padButton, stripButton, ioButton, tpButton, kbButton)) {
-            buttons.addView(b, LinearLayout.LayoutParams(dp(44), dp(44)).apply { setMargins(0, dp(6), 0, 0) })
+            buttons.addView(b, LinearLayout.LayoutParams(Theme.buttonSize, Theme.buttonSize).apply { setMargins(0, dp(6), 0, 0) })
         }
         root.addView(buttons, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT,
@@ -211,7 +213,7 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
         sideScroll = ScrollView(this).apply {
             addView(sideBar)
             visibility = View.GONE
-            setBackgroundColor(0x88000000.toInt())
+            setBackgroundColor(Theme.panelBg)
         }
         root.addView(sideScroll, FrameLayout.LayoutParams(
             dp(120), FrameLayout.LayoutParams.WRAP_CONTENT,
@@ -275,7 +277,7 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
     private fun buildSplitPanel() {
         splitPanel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(0xFF263238.toInt())
+            setBackgroundColor(Theme.splitBg)
             visibility = View.GONE
         }
         splitButtons = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -287,7 +289,7 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
             setTextColor(Color.WHITE)
             setHintTextColor(Color.GRAY)
             gravity = Gravity.TOP or Gravity.START
-            setBackgroundColor(0xFF37474F.toInt())
+            setBackgroundColor(Theme.surface)
             setPadding(dp(8), dp(8), dp(8), dp(8))
             addTextChangedListener(object : android.text.TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
@@ -314,7 +316,7 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
         if (!::splitPanel.isInitialized) return
         splitPanel.visibility = if (prefs.split) View.VISIBLE else View.GONE
         splitButton.alpha = if (prefs.split) 1f else 0.6f
-        splitButton.setBackgroundColor(if (prefs.split) 0xCC1E88E5.toInt() else 0x66000000)
+        splitButton.setBackgroundColor(if (prefs.split) Theme.active else Theme.buttonBg)
         layoutVideo()
         layoutPad()
         layoutSplitPanel()
@@ -333,7 +335,7 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
                     setTextColor(Color.WHITE)
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
                     gravity = Gravity.CENTER
-                    setBackgroundColor(0x44FFFFFF)
+                    setBackgroundColor(Theme.softButton2)
                     setPadding(dp(14), dp(12), dp(14), dp(12))
                     setOnClickListener {
                         if (prefs.haptic) performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
@@ -378,7 +380,7 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
         for (text in prefs.snippets) {
             sideBar.addView(TextView(this).apply {
                 this.text = "✎ " + if (text.length > 12) text.take(12) + "…" else text
-                setTextColor(0xFF80DEEA.toInt())
+                setTextColor(Theme.snippet)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
                 gravity = Gravity.CENTER
                 setPadding(dp(6), dp(10), dp(6), dp(10))
@@ -415,7 +417,7 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
 
     private fun updateTouchpadButton() {
         tpButton.alpha = if (prefs.touchpad) 1f else 0.6f
-        tpButton.setBackgroundColor(if (prefs.touchpad) 0xCC1E88E5.toInt() else 0x66000000)
+        tpButton.setBackgroundColor(if (prefs.touchpad) Theme.active else Theme.buttonBg)
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -644,7 +646,7 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
     private fun updateModeButtons() {
         fun mark(b: TextView, on: Boolean) {
             b.alpha = if (on) 1f else 0.6f
-            b.setBackgroundColor(if (on) 0xCC1E88E5.toInt() else 0x66000000)
+            b.setBackgroundColor(if (on) Theme.active else Theme.buttonBg)
         }
         mark(ioButton, prefs.inputOnly)
         mark(stripButton, prefs.buttonStrip)
@@ -657,7 +659,7 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
     private fun buildStrip() {
         strip = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(0x55000000)
+            setBackgroundColor(Theme.stripBg)
         }
         fun holdButton(label: String, set: (Boolean) -> Unit) = TextView(this).apply {
             text = label
@@ -666,7 +668,7 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
             gravity = Gravity.CENTER
             setOnTouchListener { v, e ->
                 when (e.actionMasked) {
-                    MotionEvent.ACTION_DOWN -> { set(true); v.setBackgroundColor(0xCC1E88E5.toInt()) }
+                    MotionEvent.ACTION_DOWN -> { set(true); v.setBackgroundColor(Theme.active) }
                     MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> { set(false); v.setBackgroundColor(0) }
                 }
                 true
@@ -681,7 +683,7 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
             text = "↕"
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
-            setBackgroundColor(0x33FFFFFF)
+            setBackgroundColor(Theme.softButton)
             var lastY = 0f
             var acc = 0f
             setOnTouchListener { _, e ->
@@ -719,7 +721,7 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
         padScale = getSharedPreferences("tabdisplay", MODE_PRIVATE).getFloat("pad_scale", 1f)
         padKeys = GamepadLayout.load(this)
         // 配置を変えるための帯（上の真ん中）
-        padToolbar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setBackgroundColor(0x88000000.toInt()) }
+        padToolbar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setBackgroundColor(Theme.panelBg) }
         fun tb(label: Int, f: () -> Unit) = TextView(this).apply {
             setText(label)
             setTextColor(Color.WHITE)
@@ -763,7 +765,7 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
                 setTextColor(Color.WHITE)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f * padScale)
                 gravity = Gravity.CENTER
-                setBackgroundColor(if (padEdit) 0x99FF9800.toInt() else 0x66000000)
+                setBackgroundColor(if (padEdit) Theme.edit else Theme.buttonBg)
                 alpha = 0.85f
             }
             val lp = FrameLayout.LayoutParams(w, h, Gravity.TOP or Gravity.START).apply {
@@ -799,11 +801,11 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
                 when (e.actionMasked) {
                     MotionEvent.ACTION_DOWN -> {
                         if (prefs.haptic) view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-                        view.setBackgroundColor(0xCC1E88E5.toInt())
+                        view.setBackgroundColor(Theme.active)
                         conn?.post(Protocol.T_INPUT, JSONObject().put("k", "key").put("vk", k.vk).put("d", true))
                     }
                     MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                        view.setBackgroundColor(0x66000000)
+                        view.setBackgroundColor(Theme.buttonBg)
                         conn?.post(Protocol.T_INPUT, JSONObject().put("k", "key").put("vk", k.vk).put("d", false))
                     }
                 }
@@ -849,7 +851,7 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
         magOn = !magOn
         if (!magOn) { zoom = 1f; panX = 0f; panY = 0f }
         magButton.alpha = if (magOn) 1f else 0.6f
-        magButton.setBackgroundColor(if (magOn) 0xCC1E88E5.toInt() else 0x66000000)
+        magButton.setBackgroundColor(if (magOn) Theme.active else Theme.buttonBg)
         Toast.makeText(this, if (magOn) R.string.mag_on else R.string.mag_off, Toast.LENGTH_SHORT).show()
         layoutVideo()
     }
@@ -1153,7 +1155,7 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
     private fun buildMini() {
         val col = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(0xFF101418.toInt())
+            setBackgroundColor(Theme.miniBg)
             setPadding(dp(16), dp(16), dp(16), dp(16))
             isClickable = true
         }
@@ -1176,7 +1178,7 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
             row.addView(TextView(this).apply {
                 setText(item.label)
                 setTextColor(Color.WHITE)
-                setBackgroundColor(0x33FFFFFF)
+                setBackgroundColor(Theme.softButton)
                 setPadding(dp(14), dp(12), dp(14), dp(12))
                 setOnClickListener {
                     val a = JSONArray()
@@ -1349,6 +1351,8 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
             })
         }
     }
+
+    override fun takeCrash(): JSONObject? = CrashLog.take(this)
 
     override fun pin(): String {
         val t = target ?: return ""

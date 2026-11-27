@@ -36,6 +36,7 @@ object Protocol {
     const val T_MIC = 36        // PCM 16bit
     const val T_APPS_REQ = 37   // ランチャーの一覧がほしい
     const val T_LAUNCH = 38     // JSON: id
+    const val T_CRASH = 39      // JSON: text, build, android, device（前に落ちたときの原因）
 
     // PC → タブレット
     const val P_CONFIG = 10    // JSON: w, h, fps, sps, pps（base64）, name

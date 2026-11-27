@@ -9,6 +9,7 @@ public sealed class RegionPicker : Form
 
     public RegionPicker(AppSettings s)
     {
+        Load += (_, _) => Theme.Apply(this); // 見た目（theme.json で差し替え）
         _s = s;
         Text = L.T("region_title");
         FormBorderStyle = FormBorderStyle.FixedDialog;

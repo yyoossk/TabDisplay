@@ -60,6 +60,7 @@ public sealed class HotkeyForm : Form
 {
     public HotkeyForm(AppSettings s)
     {
+        Load += (_, _) => Theme.Apply(this); // 見た目（theme.json で差し替え）
         Text = L.T("hk_title");
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;

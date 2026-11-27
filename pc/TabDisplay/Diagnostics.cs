@@ -157,6 +157,11 @@ public static class LogBundle
         }
         catch { }
         AddText("pc/diagnostics.txt", Diagnostics.Run(s, server));
+        // タブレットのアプリが落ちたときの記録（つないだときに届いたもの）
+        var crashes = Path.Combine(AppSettings.Dir, "tablet-crashes");
+        if (Directory.Exists(crashes))
+            foreach (var f in Directory.GetFiles(crashes, "*.txt").OrderByDescending(f => f).Take(20))
+                AddText("tablet-crashes/" + Path.GetFileName(f), File.ReadAllText(f));
         // USB でつないでいるタブレットのログ
         if (Adb.Available)
         {

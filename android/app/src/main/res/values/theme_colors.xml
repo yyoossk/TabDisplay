@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  TabDisplay の見た目（色・大きさ）はここにまとめています。
+  見た目を変えるときは、このファイル（と styles.xml）だけを差し替えれば全体が変わります。
+-->
+<resources>
+    <!-- 画面の上に出すボタン（⌨ ☰ など）の背景 -->
+    <color name="td_button_bg">#66000000</color>
+    <!-- オンになっているボタン・押しているボタン -->
+    <color name="td_active">#CC1E88E5</color>
+    <!-- メニュー（☰）・帯の背景 -->
+    <color name="td_panel_bg">#88000000</color>
+    <color name="td_strip_bg">#55000000</color>
+    <!-- 薄い背景のボタン -->
+    <color name="td_soft_button">#33FFFFFF</color>
+    <color name="td_soft_button2">#44FFFFFF</color>
+    <!-- 入力専用の面・メモ欄 -->
+    <color name="td_surface">#FF37474F</color>
+    <!-- 画面を分けたときの下の部分 -->
+    <color name="td_split_bg">#FF263238</color>
+    <!-- ミニ画面の背景 -->
+    <color name="td_mini_bg">#FF101418</color>
+    <!-- 定型文の文字 -->
+    <color name="td_snippet">#FF80DEEA</color>
+    <!-- ゲームパッドの配置を変えているときのボタン -->
+    <color name="td_edit">#99FF9800</color>
+    <!-- 遅れなどの表示の背景 -->
+    <color name="td_stats_bg">#80000000</color>
+    <!-- 画面の上のボタンの大きさ -->
+    <dimen name="td_button_size">44dp</dimen>
+</resources>

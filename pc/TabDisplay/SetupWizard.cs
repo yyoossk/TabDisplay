@@ -11,6 +11,7 @@ public sealed class SetupWizard : Form
 
     public SetupWizard(Action installDriver, Action installApp, Action connectUsb, Action showQr)
     {
+        Load += (_, _) => Theme.Apply(this); // 見た目（theme.json で差し替え）
         Text = L.T("wiz_title");
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;

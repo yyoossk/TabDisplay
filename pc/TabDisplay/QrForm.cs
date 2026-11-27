@@ -9,6 +9,7 @@ public sealed class QrForm : Form
 {
     public QrForm(AppSettings s)
     {
+        Load += (_, _) => Theme.Apply(this); // 見た目（theme.json で差し替え）
         Text = L.T("qr_title");
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
@@ -55,7 +56,7 @@ public sealed class QrForm : Form
         {
             Text = Environment.MachineName + "  " + string.Join(" / ", ips.Select(ip => ip + ":" + s.Port)),
             AutoSize = true,
-            ForeColor = Color.DimGray,
+            ForeColor = Theme.DimColor,
         });
 
         // ブラウザーで見る（アプリなし）

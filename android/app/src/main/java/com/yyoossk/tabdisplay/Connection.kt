@@ -52,6 +52,8 @@ class Connection(
         fun onSleep(on: Boolean)
         fun wantsNotify(): Boolean
         fun pin(): String
+        /** 前に落ちたときの記録（あれば一度だけ） */
+        fun takeCrash(): JSONObject?
         fun contrast(): Double
     }
 
@@ -160,6 +162,7 @@ class Connection(
         val o = DataOutputStream(BufferedOutputStream(s.getOutputStream(), 16 * 1024))
         out = o
         sendHello()
+        listener.takeCrash()?.let { send(Protocol.T_CRASH, it) }
         listener.onConnected(host)
         while (!closed) {
             val m = Protocol.read(input)

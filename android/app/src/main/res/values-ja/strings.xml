@@ -146,4 +146,9 @@
     <string name="opt_keymode">キーで送る（ゲーム向け）。オフなら文字で送る（キーボードの配列に左右されない）</string>
     <string name="snippets_title">定型文</string>
     <string name="snippets_help">1 行に 1 つ。☰ のメニューに並び、タップすると PC に入力します。</string>
+    <string name="settings_export">設定を書き出す</string>
+    <string name="settings_import">設定を読み込む</string>
+    <string name="settings_exported">設定を書き出しました（PC の合言葉も入っているので、人に渡さないでください）</string>
+    <string name="settings_imported">設定を読み込みました</string>
+    <string name="settings_import_failed">設定を読み込めませんでした</string>
 </resources>

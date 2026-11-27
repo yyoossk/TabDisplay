@@ -12,7 +12,7 @@ jobs:
     uses: yyoossk/android-build-env/.github/workflows/android-build.yml@main
     with:
       project-dir: android
-      gradle-task: assembleRelease
+      gradle-task: testDebugUnitTest assembleRelease
       artifact-name: apk
     secrets: inherit
 
@@ -51,6 +51,13 @@ jobs:
           -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none
           -p:InformationalVersion=build-${{ github.run_number }} -p:IncludeSourceRevisionInInformationalVersion=false
           -o out/TabDisplay
+
+      - name: Self test (connection)
+        shell: pwsh
+        run: |
+          $p = Start-Process out/TabDisplay/TabDisplay.exe -ArgumentList "--selftest" -Wait -PassThru
+          Get-Content "$env:APPDATA/TabDisplay/selftest.txt"
+          if ($p.ExitCode -ne 0) { throw "selftest failed ($($p.ExitCode))" }
 
       - name: Add tools (ffmpeg, adb, nefcon, virtual display driver)
         shell: pwsh

@@ -68,6 +68,15 @@ Android タブレットを Windows PC のセカンドモニターにするソフ
 - 定型文、PIN
 - PC の窓をタブで整理
 
+## 見た目を変える
+- PC: `%APPDATA%\TabDisplay\theme.json`（またはアプリと同じフォルダー）に、例えば `{"FontName":"Meiryo UI","FontSize":10,"Back":"#202124","Fore":"#E8EAED","Dim":"#9AA0A6","Accent":"#1E88E5"}` と書くと、窓の色と文字が変わる
+- タブレット: `android/app/src/main/res/values/theme_colors.xml` の色・ボタンの大きさを変えてビルドする
+
+## 自動テスト
+- PC: `TabDisplay.exe --selftest`（結果は `%APPDATA%\TabDisplay\selftest.txt`）
+- タブレット: `./gradlew testDebugUnitTest`
+- どちらも GitHub でビルドするたびに動き、失敗するとビルドが止まる
+
 ## 署名について
 
 タブレット用アプリは、更新で上書きできるよう毎回同じ鍵（`android/app/tabdisplay.jks`）で署名します。

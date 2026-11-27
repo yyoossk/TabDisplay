@@ -15,6 +15,7 @@ internal static class Program
         // 管理者で起動し直されたときの作業
         if (args.Contains("--install-driver")) return DriverSetup.Install();
         if (args.Contains("--uninstall-driver")) return DriverSetup.Uninstall();
+        if (args.Contains("--selftest")) return SelfTest.Run();
         if (args.Contains("--vdd-helper"))
         {
             VirtualDisplay.HelperMain();

@@ -809,6 +809,21 @@ internal sealed class Session
                 case Protocol.T_MIC:
                     MicBridge.Feed(Id, data);
                     break;
+                case Protocol.T_CRASH:
+                {
+                    // タブレットのアプリが前に落ちたときの原因：PC のログと tablet-crashes フォルダーに残す
+                    var j = Protocol.Json(data);
+                    var text = $"{TabletName} build {(int?)j["build"] ?? 0} Android {(string?)j["android"]} {(string?)j["device"]}\n{(string?)j["text"]}";
+                    Log.Write("tablet crash: " + text);
+                    try
+                    {
+                        var dir = Path.Combine(AppSettings.Dir, "tablet-crashes");
+                        Directory.CreateDirectory(dir);
+                        File.WriteAllText(Path.Combine(dir, $"{DateTime.Now:yyyyMMdd-HHmmss}.txt"), text);
+                    }
+                    catch { }
+                    break;
+                }
                 case Protocol.T_APPS_REQ:
                     SendApps();
                     break;

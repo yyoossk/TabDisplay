@@ -146,4 +146,9 @@
     <string name="opt_keymode">Send keys as keys (for games). Off: send as characters, which works with any keyboard layout</string>
     <string name="snippets_title">Text snippets</string>
     <string name="snippets_help">One per line. They appear in the ☰ menu; tap one to type it on the PC.</string>
+    <string name="settings_export">Export settings</string>
+    <string name="settings_import">Import settings</string>
+    <string name="settings_exported">Settings exported (the file includes the keys for your PCs; do not share it)</string>
+    <string name="settings_imported">Settings imported</string>
+    <string name="settings_import_failed">Could not import the settings</string>
 </resources>

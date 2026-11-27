@@ -44,6 +44,7 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = Prefs(this)
+        CrashLog.install(this)
         buildUi()
         handleIntent(intent)
         // 初めて開いたときは、準備のしかたを案内する
@@ -245,6 +246,29 @@ class MainActivity : Activity() {
             setText(R.string.upd_check)
             setOnClickListener { AppUpdate.check(this@MainActivity, quiet = false) }
         })
+        val tools2 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        tools2.addView(Button(this).apply {
+            setText(R.string.settings_export)
+            setOnClickListener {
+                @Suppress("DEPRECATION")
+                startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    type = "application/json"
+                    putExtra(Intent.EXTRA_TITLE, "TabDisplay-tablet-settings.json")
+                }, REQ_EXPORT)
+            }
+        })
+        tools2.addView(Button(this).apply {
+            setText(R.string.settings_import)
+            setOnClickListener {
+                @Suppress("DEPRECATION")
+                startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    type = "*/*"
+                }, REQ_IMPORT)
+            }
+        })
+        col.addView(tools2)
         tools.addView(Button(this).apply {
             setText(R.string.changelog)
             setOnClickListener { showChangelog() }
@@ -410,6 +434,29 @@ class MainActivity : Activity() {
 
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if ((requestCode == REQ_EXPORT || requestCode == REQ_IMPORT)) {
+            @Suppress("DEPRECATION")
+            super.onActivityResult(requestCode, resultCode, data)
+            val uri = data?.data
+            if (resultCode != RESULT_OK || uri == null) return
+            try {
+                if (requestCode == REQ_EXPORT) {
+                    contentResolver.openOutputStream(uri)?.use { it.write(SettingsIO.export(this).toByteArray()) }
+                    Toast.makeText(this, R.string.settings_exported, Toast.LENGTH_LONG).show()
+                } else {
+                    val text = contentResolver.openInputStream(uri)?.use { it.bufferedReader().readText() } ?: ""
+                    if (SettingsIO.import(this, text)) {
+                        Toast.makeText(this, R.string.settings_imported, Toast.LENGTH_LONG).show()
+                        recreate()
+                    } else {
+                        Toast.makeText(this, R.string.settings_import_failed, Toast.LENGTH_LONG).show()
+                    }
+                }
+            } catch (_: Exception) {
+                Toast.makeText(this, R.string.settings_import_failed, Toast.LENGTH_LONG).show()
+            }
+            return
+        }
         val r = IntentIntegrator.parseActivityResult(requestCode, resultCode, data)
         if (r == null) {
             @Suppress("DEPRECATION")
@@ -438,4 +485,9 @@ class MainActivity : Activity() {
     }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density + 0.5f).toInt()
+
+    companion object {
+        private const val REQ_EXPORT = 21
+        private const val REQ_IMPORT = 22
+    }
 }

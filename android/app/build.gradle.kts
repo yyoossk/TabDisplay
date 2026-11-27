@@ -4,6 +4,9 @@ plugins {
 }
 
 android {
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
     namespace = "com.yyoossk.tabdisplay"
     compileSdk = 35
 
@@ -60,4 +63,6 @@ dependencies {
     // QR コード読み取り。core 3.3.0 は Android 6 (API 23) でも動く版
     implementation("com.journeyapps:zxing-android-embedded:4.3.0") { isTransitive = false }
     implementation("com.google.zxing:core:3.3.0")
+    // 自動テスト（GitHub でビルドするたびに動く）
+    testImplementation("junit:junit:4.13.2")
 }

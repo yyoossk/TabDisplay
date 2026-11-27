@@ -175,6 +175,27 @@ public class AppSettings
         }
     }
 
+    /// <summary>設定をファイルに書き出す（合言葉も入るので、ほかの PC に移すとタブレットはそのままつながる）</summary>
+    public void Export(string path) => File.WriteAllText(path, JsonSerializer.Serialize(this, Json));
+
+    /// <summary>書き出した設定を読み込む（次に起動したときから全部が反映される）</summary>
+    public static bool Import(string path)
+    {
+        try
+        {
+            var s = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(path));
+            if (s == null) return false;
+            if (string.IsNullOrEmpty(s.Token)) s.Token = NewToken();
+            s.Save();
+            return true;
+        }
+        catch (Exception e)
+        {
+            Log.Write("import: " + e.Message);
+            return false;
+        }
+    }
+
     public static string NewToken()
     {
         const string chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
