@@ -34,7 +34,7 @@
     <string name="opt_audio">PC の音を鳴らす</string>
     <string name="gestures">タップ：クリック ／ 長押し：右クリック ／ なぞる：スクロール\n2 本指タップ：右クリック ／ つまむ・広げる：拡大縮小 ／ ペン：筆圧つきのペン入力\n⌨ ボタン：キーボード</string>
     <string name="notes_title">注意</string>
-    <string name="notes">・タブレットを 2 台以上つないでいるときに、1 台つないだり外したりすると、全部のタブレットの映像が数秒止まります。\n・画質が自動で変わるとき・タブレットを回したときは、映像がごく短く止まります。\n・通信はすべて暗号化しています。Wi-Fi で初めてつなぐときは PC の QR コードを読んでください（PC の確認に使います）。\n・PC で管理者として動いているソフトの窓は、タブレットから操作できません。\n・ペンの筆圧・傾きは、PC が Windows 10（1809）以降のときに使えます。\n・PC の音は、少し遅れて鳴ります。\n・USB は「USB デバッグ」をオンに、Wi-Fi は PC と同じネットワークにつないでください。\n・つないでいる間は画面がつきっぱなしになるので、電池を多く使います。充電しながらの利用がおすすめです。\n・ゲームパッドのボタンは、PC にはキーボードのキーとして届きます。\n・「この端末の画面をほかのタブレットに映す」では、受ける側からの操作はタップ・長押し・スクロール・簡単な文字入力だけです（ペンの筆圧・ショートカットは使えません）。\n・クリップボードの共有は文字だけです。PC から届いたファイルは「Download/TabDisplay」（Android 9 までは アプリのフォルダー）に保存します。\n・自動更新を使うには、TabDisplay からのアプリのインストールを許可してください。\n・コントラストを変えると、PC 側で絵を作り直すので、PC の負担が少し増えます。\n・録画には音は入りません。画面写真は Android 7 以降で使えます。</string>
+    <string name="notes">・タブレットを 2 台以上つないでいるときに、1 台つないだり外したりすると、全部のタブレットの映像が数秒止まります。\n・画質が自動で変わるとき・タブレットを回したときは、映像がごく短く止まります。\n・通信はすべて暗号化しています。Wi-Fi で初めてつなぐときは PC の QR コードを読んでください（PC の確認に使います）。\n・PC で管理者として動いているソフトの窓は、タブレットから操作できません。\n・ペンの筆圧・傾きは、PC が Windows 10（1809）以降のときに使えます。\n・PC の音は、少し遅れて鳴ります。\n・USB は「USB デバッグ」をオンに、Wi-Fi は PC と同じネットワークにつないでください。\n・つないでいる間は画面がつきっぱなしになるので、電池を多く使います。充電しながらの利用がおすすめです。\n・ゲームパッドのボタンは、PC にはキーボードのキーとして届きます。\n・「この端末の画面をほかのタブレットに映す」では、受ける側からの操作はタップ・長押し・スクロール・簡単な文字入力だけです（ペンの筆圧・ショートカットは使えません）。\n・クリップボードの共有は文字だけです。PC から届いたファイルは「Download/TabDisplay」（Android 9 までは アプリのフォルダー）に保存します。\n・自動更新を使うには、TabDisplay からのアプリのインストールを許可してください。\n・コントラストを変えると、PC 側で絵を作り直すので、PC の負担が少し増えます。\n・録画には音は入りません。画面写真は Android 7 以降で使えます。\n・カメラを PC で使うときは、TabDisplay を開いたままにしてください（Android の決まりで、ほかのアプリを開くとカメラが止まります）。</string>
     <string name="sc_copy">コピー</string>
     <string name="sc_paste">貼り付け</string>
     <string name="sc_cut">切り取り</string>
@@ -125,4 +125,15 @@
     <string name="opt_warmth">暖色（夜向け）</string>
     <string name="opt_contrast">コントラスト（PC 側で変えます）</string>
     <string name="changelog">更新履歴</string>
+    <string name="launcher_open">PC のソフトを開く</string>
+    <string name="launcher_empty">ソフトがありません。PC のタスクバーにピン留めするか、PC の TabDisplay で並べるソフトを書いてください。</string>
+    <string name="ntouch_on">タッチを Windows のタッチで送る</string>
+    <string name="ntouch_off">タッチをマウスで送る</string>
+    <string name="ntouch_on_msg">タッチを Windows のタッチとして送ります（2 本指の拡大・スワイプなどが、タッチ画面と同じように効きます）。</string>
+    <string name="ntouch_off_msg">タッチをマウスとして送ります（タップ＝クリック、長押し＝右クリック、なぞる＝スクロール）。</string>
+    <string name="cam_started">PC がこのタブレットのカメラを使っています</string>
+    <string name="mini_notify">PC の通知</string>
+    <string name="opt_mini">ミニ画面（スマホ向け）：PC の画面の代わりに、時計・PC の通知・ショートカットのボタンを出す</string>
+    <string name="opt_ntouch">タッチを Windows のタッチとして送る（マウスの代わりに）</string>
+    <string name="opt_left">左利き：ボタンを左側に置く（次につないだときから）</string>
 </resources>

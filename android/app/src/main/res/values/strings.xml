@@ -34,7 +34,7 @@
     <string name="opt_audio">Play the PC\'s sound</string>
     <string name="gestures">Tap: click / Long press: right click / Drag: scroll\nTwo-finger tap: right click / Pinch: zoom / Pen: pen input with pressure\n⌨ button: keyboard</string>
     <string name="notes_title">Notes</string>
-    <string name="notes">- With two or more tablets, connecting or disconnecting one stops the picture on all tablets for a few seconds.\n- When quality changes automatically, or when you rotate the tablet, the picture stops very briefly.\n- All communication is encrypted. The first Wi-Fi connection needs the QR code on the PC (it is used to verify the PC).\n- Windows of programs running as administrator on the PC cannot be operated from the tablet.\n- Pen pressure and tilt need Windows 10 (1809) or later on the PC.\n- The PC\'s sound plays here with a short delay.\n- For USB, turn on \"USB debugging\". For Wi-Fi, put the PC and tablet on the same network.\n- The screen stays on while connected, which uses more battery. Charging while you use it is recommended.\n- Gamepad buttons reach the PC as keyboard keys.\n- When showing this device\'s screen on another tablet, only taps, long presses, scrolling and simple text input work from the other tablet (no pen pressure or shortcuts).\n- Clipboard sharing is text only. Files from the PC are saved in Download/TabDisplay (the app folder on Android 9 and earlier).\n- To update automatically, allow TabDisplay to install apps.\n- Changing contrast is done on the PC, which uses a little more of the PC.\n- Recordings have no sound. Screenshots need Android 7 or later.</string>
+    <string name="notes">- With two or more tablets, connecting or disconnecting one stops the picture on all tablets for a few seconds.\n- When quality changes automatically, or when you rotate the tablet, the picture stops very briefly.\n- All communication is encrypted. The first Wi-Fi connection needs the QR code on the PC (it is used to verify the PC).\n- Windows of programs running as administrator on the PC cannot be operated from the tablet.\n- Pen pressure and tilt need Windows 10 (1809) or later on the PC.\n- The PC\'s sound plays here with a short delay.\n- For USB, turn on \"USB debugging\". For Wi-Fi, put the PC and tablet on the same network.\n- The screen stays on while connected, which uses more battery. Charging while you use it is recommended.\n- Gamepad buttons reach the PC as keyboard keys.\n- When showing this device\'s screen on another tablet, only taps, long presses, scrolling and simple text input work from the other tablet (no pen pressure or shortcuts).\n- Clipboard sharing is text only. Files from the PC are saved in Download/TabDisplay (the app folder on Android 9 and earlier).\n- To update automatically, allow TabDisplay to install apps.\n- Changing contrast is done on the PC, which uses a little more of the PC.\n- Recordings have no sound. Screenshots need Android 7 or later.\n- While the PC uses this tablet\'s camera, keep TabDisplay open (Android stops the camera when another app is opened).</string>
     <string name="sc_copy">Copy</string>
     <string name="sc_paste">Paste</string>
     <string name="sc_cut">Cut</string>
@@ -125,4 +125,15 @@
     <string name="opt_warmth">Warm color (for night)</string>
     <string name="opt_contrast">Contrast (done on the PC)</string>
     <string name="changelog">Change history</string>
+    <string name="launcher_open">Open a PC program</string>
+    <string name="launcher_empty">No programs. Pin programs to the PC taskbar, or list them in TabDisplay on the PC.</string>
+    <string name="ntouch_on">Send touches as Windows touch</string>
+    <string name="ntouch_off">Send touches as mouse</string>
+    <string name="ntouch_on_msg">Touches go to the PC as Windows touch (pinch, swipe and so on work as on a touch screen).</string>
+    <string name="ntouch_off_msg">Touches go to the PC as mouse (tap = click, long press = right click, drag = scroll).</string>
+    <string name="cam_started">The PC is using this tablet\'s camera</string>
+    <string name="mini_notify">PC notifications</string>
+    <string name="opt_mini">Mini screen (for phones): a clock, PC notifications and shortcut buttons instead of the PC screen</string>
+    <string name="opt_ntouch">Send touches as Windows touch (instead of mouse)</string>
+    <string name="opt_left">Left-handed: put the buttons on the left (applies the next time you connect)</string>
 </resources>
