@@ -36,6 +36,8 @@ class ProtocolTest {
         assertEquals(1, Protocol.T_HELLO)
         assertEquals(4, Protocol.T_PING)
         assertEquals(39, Protocol.T_CRASH)
+        assertEquals(50, Protocol.T_CHECK)
+        assertEquals(51, Protocol.P_CHECK)
         assertEquals(11, Protocol.P_VIDEO)
         assertEquals(12, Protocol.P_PONG)
         assertEquals(14, Protocol.P_ERROR)

@@ -177,6 +177,26 @@ class Prefs(ctx: Context) {
         get() = sp.getBoolean("ntouch", false)
         set(v) = sp.edit().putBoolean("ntouch", v).apply()
 
+    /** 手のひらの誤タッチを無視する（ペンを使っている間・大きな面のタッチ） */
+    var palmReject: Boolean
+        get() = sp.getBoolean("palm", true)
+        set(v) = sp.edit().putBoolean("palm", v).apply()
+
+    /** タブレットから選ぶ画質（pc = PC の設定のまま / auto / text / motion） */
+    var quality2: String
+        get() = sp.getString("quality2", "pc") ?: "pc"
+        set(v) = sp.edit().putString("quality2", v).apply()
+
+    /** 電池が少ない・熱いときに省電力モードにするか聞く */
+    var powerAsk: Boolean
+        get() = sp.getBoolean("power_ask", true)
+        set(v) = sp.edit().putBoolean("power_ask", v).apply()
+
+    /** Wi-Fi が不安定なときに知らせる */
+    var weakWarn: Boolean
+        get() = sp.getBoolean("weak_warn", true)
+        set(v) = sp.edit().putBoolean("weak_warn", v).apply()
+
     /** 画面の向き：0 = 自動、1 = 横に固定、2 = 縦に固定 */
     var orientation: Int
         get() = sp.getInt("orient", 0)

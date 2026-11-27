@@ -187,6 +187,21 @@ class MainActivity : Activity() {
             setOnCheckedChangeListener { _, b -> prefs.nativeTouch = b }
         })
         col.addView(CheckBox(this).apply {
+            setText(R.string.palm_reject)
+            isChecked = prefs.palmReject
+            setOnCheckedChangeListener { _, b -> prefs.palmReject = b }
+        })
+        col.addView(CheckBox(this).apply {
+            setText(R.string.power_ask)
+            isChecked = prefs.powerAsk
+            setOnCheckedChangeListener { _, b -> prefs.powerAsk = b }
+        })
+        col.addView(CheckBox(this).apply {
+            setText(R.string.weak_warn)
+            isChecked = prefs.weakWarn
+            setOnCheckedChangeListener { _, b -> prefs.weakWarn = b }
+        })
+        col.addView(CheckBox(this).apply {
             setText(R.string.opt_left)
             isChecked = prefs.leftHanded
             setOnCheckedChangeListener { _, b -> prefs.leftHanded = b }

@@ -352,6 +352,12 @@ public sealed class MainForm : Form
         var clip = new CheckBox { Text = L.T("chk_clip"), AutoSize = true, Checked = _s.ShareClipboard };
         clip.CheckedChanged += (_, _) => { _s.ShareClipboard = clip.Checked; _s.Save(); };
         Row(clip);
+        var rescue = new CheckBox { Text = L.T("chk_rescue"), AutoSize = true, Checked = _s.RescueWindows };
+        rescue.CheckedChanged += (_, _) => { _s.RescueWindows = rescue.Checked; _s.Save(); };
+        Row(rescue);
+        var remember = new CheckBox { Text = L.T("chk_remember_windows"), AutoSize = true, Checked = _s.RememberWindows };
+        remember.CheckedChanged += (_, _) => { _s.RememberWindows = remember.Checked; _s.Save(); };
+        Row(remember);
 
         // タブレットのカメラ・マイク（いちばん先につないだタブレット）
         var cam = new CheckBox { Text = L.T("chk_camera"), AutoSize = true, Checked = _s.TabletCamera };

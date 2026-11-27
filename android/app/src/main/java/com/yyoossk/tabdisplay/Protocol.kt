@@ -37,6 +37,7 @@ object Protocol {
     const val T_APPS_REQ = 37   // ランチャーの一覧がほしい
     const val T_LAUNCH = 38     // JSON: id
     const val T_CRASH = 39      // JSON: text, build, android, device（前に落ちたときの原因）
+    const val T_CHECK = 50      // JSON: step（動作チェック）
 
     // PC → タブレット
     const val P_CONFIG = 10    // JSON: w, h, fps, sps, pps（base64）, name
@@ -56,6 +57,7 @@ object Protocol {
     const val P_MIC = 44       // JSON: on
     const val P_APPS = 45      // JSON: items[{id, name, icon(base64 PNG)}]
     const val P_SLEEP = 46     // JSON: on（PC が使われていない：画面を消す）
+    const val P_CHECK = 51     // JSON: step, ok, audio, video（動作チェックの答え）
 
     /** PC が Wi-Fi に出す「ここにいます」の知らせ（UDP ブロードキャスト） */
     const val DISCOVERY_PORT = 38501

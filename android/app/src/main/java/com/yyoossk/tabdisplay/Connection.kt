@@ -50,6 +50,8 @@ class Connection(
         fun onMic(on: Boolean)
         fun onApps(items: org.json.JSONArray)
         fun onSleep(on: Boolean)
+        /** 動作チェックの答え */
+        fun onCheck(j: JSONObject) {}
         fun wantsNotify(): Boolean
         fun pin(): String
         /** 前に落ちたときの記録（あれば一度だけ） */
@@ -215,6 +217,7 @@ class Connection(
                 Protocol.P_MIC -> listener.onMic(JSONObject(String(m.data, Charsets.UTF_8)).optBoolean("on"))
                 Protocol.P_APPS -> listener.onApps(JSONObject(String(m.data, Charsets.UTF_8)).optJSONArray("items") ?: org.json.JSONArray())
                 Protocol.P_SLEEP -> listener.onSleep(JSONObject(String(m.data, Charsets.UTF_8)).optBoolean("on"))
+                Protocol.P_CHECK -> listener.onCheck(JSONObject(String(m.data, Charsets.UTF_8)))
                 Protocol.P_NOTIFY -> {
                     val j = JSONObject(String(m.data, Charsets.UTF_8))
                     listener.onNotify(j.optString("app"), j.optString("title"), j.optString("body"))

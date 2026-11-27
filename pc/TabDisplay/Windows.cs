@@ -18,7 +18,7 @@ public static class Win
     [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hWnd);
     [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr hWnd);
     [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr hWnd);
-    [DllImport("user32.dll")] private static extern bool IsZoomed(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr hWnd);
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hWnd, out RECT r);
     [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr hWnd, int cmd);
@@ -79,6 +79,14 @@ public static class Win
         if (DwmGetWindowAttribute(h, DWMWA_EXTENDED_FRAME_BOUNDS, out RECT r, Marshal.SizeOf<RECT>()) != 0)
             if (!GetWindowRect(h, out r)) return null;
         return Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom);
+    }
+
+    /// <summary>ウィンドウを決めた位置・大きさに置く</summary>
+    public static void Place(IntPtr h, Rectangle r)
+    {
+        if (!IsWindow(h)) return;
+        if (IsZoomed(h) || IsIconic(h)) ShowWindow(h, SW_RESTORE);
+        SetWindowPos(h, IntPtr.Zero, r.Left, r.Top, r.Width, r.Height, SWP_NOZORDER | SWP_NOACTIVATE);
     }
 
     /// <summary>ウィンドウを指定の画面へ移す（最大化していたら移した先でも最大化）</summary>

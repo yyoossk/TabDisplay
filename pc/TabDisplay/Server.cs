@@ -243,6 +243,13 @@ public sealed class Server : IDisposable
                 s.StopDevices();
                 if (removed)
                 {
+                    // 「広げる」のとき：タブレット側の窓を覚えて、PC のメイン画面へ戻す（画面が消える前に）
+                    var t = s.LastTarget;
+                    if (t != null && _settings.Mode == ShowMode.Extend && !s.InputOnly)
+                    {
+                        try { WindowKeeper.OnDisconnect(s.Id, t, _settings.RememberWindows, _settings.RescueWindows); }
+                        catch (Exception e) { Log.Write("windows: " + e.Message); }
+                    }
                     RequestLayout(null);
                     ApplyDevices();
                     if (left == 0)
@@ -631,6 +638,15 @@ internal sealed class Session
     public bool CanHevc;
     /// <summary>コントラスト（1.0 = そのまま）。タブレットの設定</summary>
     public double Contrast = 1.0;
+    /// <summary>省電力モード（タブレットの電池が少ない・熱いとき、タブレットで「はい」を選んだら）</summary>
+    public volatile bool PowerSave;
+    /// <summary>タブレットから選んだ画質の方針（null = PC の設定のまま）</summary>
+    public QualityMode? QualityFromTablet;
+    /// <summary>最後に映していた画面（外したときに窓を戻すため）</summary>
+    public DisplayInfo? LastTarget;
+    private bool _windowsRestored;
+    private int FpsNow => PowerSave ? Math.Min(_settings.Fps, 30) : _settings.Fps;
+    private int MaxMbps => PowerSave ? Math.Max(2, _settings.BitrateMbps / 2) : _settings.BitrateMbps;
     /// <summary>つないだら開くソフトをもう開いたか</summary>
     public bool AppsLaunched;
     // 画質の方針（自動のとき）
@@ -745,6 +761,29 @@ internal sealed class Session
                         InputOnly = io;
                         _server.RequestLayout(null); // 仮想ディスプレイの枚数が変わる
                     }
+                    // 省電力モード・タブレットから選んだ画質
+                    var restart = false;
+                    if (j["power"] != null)
+                    {
+                        var ps = (bool?)j["power"] ?? false;
+                        if (ps != PowerSave) { PowerSave = ps; restart = true; Log.Write($"{TabletName}: power save {ps}"); }
+                    }
+                    if (j["quality"] != null)
+                    {
+                        QualityMode? q = (string?)j["quality"] switch
+                        {
+                            "text" => QualityMode.Text,
+                            "motion" => QualityMode.Motion,
+                            "auto" => QualityMode.Auto,
+                            _ => null,
+                        };
+                        if (q != QualityFromTablet) { QualityFromTablet = q; restart = true; }
+                    }
+                    if (restart)
+                    {
+                        if (PowerSave) CurrentMbps = Math.Min(CurrentMbps, MaxMbps);
+                        _server.RequestLayout(this);
+                    }
                     var ct = (double?)j["contrast"] ?? Contrast;
                     if (Math.Abs(ct - Contrast) > 0.01)
                     {
@@ -809,6 +848,25 @@ internal sealed class Session
                 case Protocol.T_MIC:
                     MicBridge.Feed(Id, data);
                     break;
+                case Protocol.T_CHECK:
+                {
+                    // 動作チェック：タブレットからの問い合わせに答える
+                    var j = Protocol.Json(data);
+                    var step = (string?)j["step"] ?? "";
+                    if (step == "sound")
+                    {
+                        // PC で音を鳴らす（タブレットに音が届くか確かめる）
+                        try { System.Media.SystemSounds.Asterisk.Play(); } catch { }
+                    }
+                    Send(Protocol.Pack(Protocol.P_CHECK, new JsonObject
+                    {
+                        ["step"] = step,
+                        ["ok"] = true,
+                        ["audio"] = _settings.AudioToTablet,
+                        ["video"] = _capture != null,
+                    }));
+                    break;
+                }
                 case Protocol.T_CRASH:
                 {
                     // タブレットのアプリが前に落ちたときの原因：PC のログと tablet-crashes フォルダーに残す
@@ -930,7 +988,7 @@ internal sealed class Session
     }
 
     /// <summary>文字をくっきりにするか（画質の方針）</summary>
-    private bool TextQualityNow => _settings.Quality switch
+    private bool TextQualityNow => (QualityFromTablet ?? _settings.Quality) switch
     {
         QualityMode.Text => true,
         QualityMode.Motion => false,
@@ -956,9 +1014,20 @@ internal sealed class Session
         {
             var old = _capture;
             _target = target;
+            LastTarget = target;
             SendStatus("ok");
+            // 前にこのタブレットに置いていた窓を戻す（初めて映したときだけ）
+            if (!_windowsRestored && _settings.Mode == ShowMode.Extend && _settings.RememberWindows && !region)
+            {
+                _windowsRestored = true;
+                Task.Delay(2000).ContinueWith(_ =>
+                {
+                    try { if (!_closed) WindowKeeper.Restore(Id, target); }
+                    catch (Exception e) { Log.Write("windows: " + e.Message); }
+                });
+            }
             var spec = new CaptureSpec(target.DeviceName, target.Width, target.Height, outW, outH,
-                _settings.Fps, Math.Clamp(CurrentMbps, 1, _settings.BitrateMbps), _settings.SkipStatic,
+                FpsNow, Math.Clamp(CurrentMbps, 1, MaxMbps), _settings.SkipStatic,
                 offX, offY, region, TextQualityNow, _settings.UseHevc && CanHevc, Contrast);
             var cap = new Capture(spec, _settings);
             cap.Config += (w, h, codec, vps, sps, pps) =>
@@ -975,7 +1044,7 @@ internal sealed class Session
                 {
                     ["w"] = w,
                     ["h"] = h,
-                    ["fps"] = _settings.Fps,
+                    ["fps"] = FpsNow,
                     ["codec"] = codec,
                     ["vps"] = vps != null ? Convert.ToBase64String(vps) : null,
                     ["sps"] = Convert.ToBase64String(sps),

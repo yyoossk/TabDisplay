@@ -16,6 +16,7 @@ object Theme {
     var snippet = 0xFF80DEEA.toInt()
     var edit = 0x99FF9800.toInt()
     var statsBg = 0x80000000.toInt()
+    var weakBg = 0xCCE65100.toInt()
     var buttonSize = 0
 
     fun init(ctx: Context) {
@@ -33,6 +34,7 @@ object Theme {
         c(R.color.td_snippet)?.let { snippet = it }
         c(R.color.td_edit)?.let { edit = it }
         c(R.color.td_stats_bg)?.let { statsBg = it }
+        c(R.color.td_weak_bg)?.let { weakBg = it }
         buttonSize = r.getDimensionPixelSize(R.dimen.td_button_size)
     }
 }

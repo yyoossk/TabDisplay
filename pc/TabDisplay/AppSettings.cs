@@ -125,6 +125,10 @@ public class AppSettings
     public DateTime LastUpdateCheck { get; set; } = DateTime.MinValue;
     /// <summary>クリップボード（コピーした文字）をタブレットと共有する</summary>
     public bool ShareClipboard { get; set; } = true;
+    /// <summary>タブレットを外したら、タブレット側の窓を PC のメイン画面に戻す</summary>
+    public bool RescueWindows { get; set; } = true;
+    /// <summary>タブレットごとに窓の並びを覚えて、次につないだら戻す</summary>
+    public bool RememberWindows { get; set; } = true;
     /// <summary>H.265 で送る（グラボとタブレットが対応しているとき）</summary>
     public bool UseHevc { get; set; } = true;
     /// <summary>うまく動いた H.265 の圧縮方式</summary>

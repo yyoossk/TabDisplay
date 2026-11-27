@@ -35,16 +35,20 @@ internal static class SelfTest
         {
             var gotStatus = false;
             var gotPong = false;
+            var gotCheck = false;
             c.Write(Protocol.Pack(Protocol.T_PING, new JsonObject { ["tab"] = 12345 }));
+            c.Write(Protocol.Pack(Protocol.T_CHECK, new JsonObject { ["step"] = "link" }));
             var until = DateTime.UtcNow.AddSeconds(10);
-            while (DateTime.UtcNow < until && !(gotStatus && gotPong))
+            while (DateTime.UtcNow < until && !(gotStatus && gotPong && gotCheck))
             {
                 var (t, d) = Protocol.Read(c);
                 if (t == Protocol.P_STATUS) gotStatus = true;
                 if (t == Protocol.P_PONG && (long?)Protocol.Json(d)["tab"] == 12345) gotPong = true;
+                if (t == Protocol.P_CHECK && (string?)Protocol.Json(d)["step"] == "link") gotCheck = true;
             }
             Check("status received", gotStatus);
             Check("ping → pong", gotPong);
+            Check("check → answer", gotCheck);
             c.Write(Protocol.Pack(Protocol.T_CRASH, new JsonObject { ["text"] = "selftest", ["build"] = 0 }));
             c.Write(Protocol.Pack(Protocol.T_BYE, Array.Empty<byte>()));
         });

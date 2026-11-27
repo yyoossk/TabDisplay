@@ -365,6 +365,9 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
                 buildShortcuts()
             },
             R.string.shot_take to { takePicture() },
+            R.string.quality_menu to { chooseQuality() },
+            (if (powerSave) R.string.power_off else R.string.power_on) to { setPowerSave(!powerSave, true) },
+            R.string.check_menu to { runCheck() },
             (if (recorder != null) R.string.rec_stop else R.string.rec_start) to { toggleRecording() },
         )) {
             sideBar.addView(TextView(this).apply {
@@ -1263,6 +1266,7 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
         ui.post {
             target?.let { prefs.remember(it) }
             lastSentSize = currentSize() // 接続のときに送った大きさ
+            sendPowerAndQuality()
             showMessage(getString(R.string.waiting_video))
         }
     }
@@ -1319,6 +1323,7 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
     }
 
     override fun onStatus(s: String) {
+        lastStatus = s
         ui.post {
             when (s) {
                 "pc_only" -> { showMessage(getString(R.string.pc_only)); video.visibility = View.INVISIBLE }
@@ -1389,6 +1394,7 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
     override fun onFrameRendered(pcTimeUs: Long) {
         val c = conn ?: return
         framesThisSecond++
+        lastFrameAt = SystemClock.elapsedRealtime()
         // 遅れ = 今（PC の時計に直したもの） − PC が送った時刻
         val lat = VideoDecoder.nowUs() + c.clockOffsetUs - pcTimeUs
         if (lat in 0..2_000_000) {
@@ -1451,6 +1457,8 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
                 window.attributes = window.attributes.apply { screenBrightness = 0.05f }
             }
             conn?.post(Protocol.T_STATS, JSONObject().put("fps", fps).put("lat", lat).put("rtt", rtt))
+            checkWeakLink(fps, lat, rtt)
+            if (++powerTick % 30 == 1) checkPower()
             ui.postDelayed(this, 1000)
         }
     }
@@ -1492,6 +1500,8 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
         target.setOnTouchListener { v, e ->
             touched()
             touchView = v
+            if (isPen(e)) lastPenAt = SystemClock.elapsedRealtime()
+            else if (palmFilter(e)) return@setOnTouchListener true
             if (magOn && v === video && !isPen(e)) {
                 handleMagnify(v, e)
                 return@setOnTouchListener true
@@ -1824,6 +1834,284 @@ class DisplayActivity : Activity(), Connection.Listener, VideoDecoder.Listener, 
             lastBack = now
             Toast.makeText(this, R.string.exit_hint, Toast.LENGTH_SHORT).show()
         }
+    }
+
+    // ---------- 手のひらの誤タッチ防止 ----------
+    // ペンを使っている間（ペンが近い・さわった直後）と、指よりずっと大きな面のタッチは無視する
+
+    private var lastPenAt = 0L
+    private var palmBlocked = false
+
+    override fun dispatchGenericMotionEvent(ev: MotionEvent): Boolean {
+        // ペンを浮かせているとき（ホバー）も「ペンを使っている」とみなす
+        if (isPen(ev)) lastPenAt = SystemClock.elapsedRealtime()
+        return super.dispatchGenericMotionEvent(ev)
+    }
+
+    /** true なら、このタッチは無視する */
+    private fun palmFilter(e: MotionEvent): Boolean {
+        if (!prefs.palmReject || palmCancelling) return false
+        when (e.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                val penNear = SystemClock.elapsedRealtime() - lastPenAt < 700
+                palmBlocked = penNear || isPalm(e)
+            }
+            MotionEvent.ACTION_POINTER_DOWN, MotionEvent.ACTION_MOVE -> if (!palmBlocked && isPalm(e)) {
+                // 途中で手のひらが乗ったら、そこで止める
+                palmBlocked = true
+                val c = MotionEvent.obtain(e).apply { action = MotionEvent.ACTION_CANCEL }
+                palmCancel(c)
+                c.recycle()
+                return true
+            }
+        }
+        val blocked = palmBlocked
+        if (e.actionMasked == MotionEvent.ACTION_UP || e.actionMasked == MotionEvent.ACTION_CANCEL) palmBlocked = false
+        return blocked
+    }
+
+    private var palmCancelling = false
+
+    /** 手のひらと分かったとき、始まっていた操作を取り消す（ふつうのタッチ処理に CANCEL を流す） */
+    private fun palmCancel(c: MotionEvent) {
+        if (palmCancelling) return
+        palmCancelling = true
+        try { touchView?.dispatchTouchEvent(c) } finally { palmCancelling = false }
+    }
+
+    private fun isPalm(e: MotionEvent): Boolean {
+        val limit = dp(110) // 指はふつう 60dp ほど。それよりずっと大きい面は手のひら
+        for (i in 0 until e.pointerCount) {
+            if (e.getToolType(i) == MotionEvent.TOOL_TYPE_STYLUS) continue
+            if (e.getTouchMajor(i) > limit) return true
+        }
+        return false
+    }
+
+    // ---------- 省電力モード（電池が少ない・熱いとき、聞いてから） ----------
+
+    private var powerSave = false
+    private var powerTick = 0
+    private var powerAskedAt = 0L
+    private var powerDialog: android.app.AlertDialog? = null
+
+    private fun checkPower() {
+        val b = registerReceiver(null, android.content.IntentFilter(Intent.ACTION_BATTERY_CHANGED)) ?: return
+        val level = b.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1)
+        val scale = b.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, 100)
+        val plugged = b.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED, 0) != 0
+        val temp = b.getIntExtra(android.os.BatteryManager.EXTRA_TEMPERATURE, 0) / 10.0
+        val pct = if (level >= 0 && scale > 0) level * 100 / scale else 100
+        val low = pct <= 20 && !plugged
+        val hot = temp >= 43.0
+        if (powerSave) {
+            // 充電を始めて、熱も下がったら元に戻す
+            if (!low && !hot && (plugged || pct > 30) && temp < 40.0) {
+                setPowerSave(false, false)
+                Toast.makeText(this, R.string.power_auto_off, Toast.LENGTH_LONG).show()
+            }
+            return
+        }
+        if (!prefs.powerAsk || conn == null || (!low && !hot)) return
+        if (powerDialog?.isShowing == true) return
+        // 「いいえ」のあとは 30 分聞かない
+        if (SystemClock.elapsedRealtime() - powerAskedAt < 30 * 60_000L && powerAskedAt != 0L) return
+        powerAskedAt = SystemClock.elapsedRealtime()
+        val msg = if (hot) getString(R.string.power_hot_msg, temp.toInt()) else getString(R.string.power_low_msg, pct)
+        powerDialog = android.app.AlertDialog.Builder(this)
+            .setTitle(if (hot) R.string.power_hot_title else R.string.power_low_title)
+            .setIcon(android.R.drawable.ic_dialog_alert)
+            .setMessage(msg + "\n\n" + getString(R.string.power_question))
+            .setPositiveButton(R.string.power_yes) { _, _ -> setPowerSave(true, true) }
+            .setNegativeButton(R.string.power_no, null)
+            .setNeutralButton(R.string.power_never) { _, _ -> prefs.powerAsk = false }
+            .show()
+    }
+
+    private fun setPowerSave(on: Boolean, notify: Boolean) {
+        powerSave = on
+        conn?.post(Protocol.T_OPTS, JSONObject().put("power", on))
+        // 画面も少し暗くする
+        window.attributes = window.attributes.apply {
+            screenBrightness = if (on) 0.3f else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+        }
+        if (notify) Toast.makeText(this, if (on) R.string.power_on_msg else R.string.power_off_msg, Toast.LENGTH_LONG).show()
+        buildShortcuts()
+    }
+
+    // ---------- タブレットから画質を選ぶ ----------
+
+    private fun chooseQuality() {
+        val keys = arrayOf("pc", "auto", "text", "motion")
+        val names = arrayOf(getString(R.string.q2_pc), getString(R.string.q2_auto), getString(R.string.q2_text), getString(R.string.q2_motion))
+        android.app.AlertDialog.Builder(this)
+            .setTitle(R.string.quality_menu)
+            .setSingleChoiceItems(names, keys.indexOf(prefs.quality2).coerceAtLeast(0)) { d, i ->
+                prefs.quality2 = keys[i]
+                conn?.post(Protocol.T_OPTS, JSONObject().put("quality", keys[i]))
+                d.dismiss()
+            }
+            .show()
+    }
+
+    private fun sendPowerAndQuality() {
+        val o = JSONObject().put("quality", prefs.quality2)
+        if (powerSave) o.put("power", true)
+        conn?.post(Protocol.T_OPTS, o)
+    }
+
+    // ---------- Wi-Fi が不安定なときに知らせる ----------
+
+    private var weakTicks = 0
+    private var goodTicks = 0
+    private var weakBar: TextView? = null
+    private var weakDismissedAt = 0L
+
+    private fun checkWeakLink(fps: Int, lat: Int, rtt: Int) {
+        val t = target
+        if (!prefs.weakWarn || t == null || t.usb || conn == null) { hideWeak(); return }
+        val active = SystemClock.elapsedRealtime() - lastFrameAt < 3000
+        val bad = active && (rtt > 80 || lat > 150)
+        if (bad) { weakTicks++; goodTicks = 0 } else { goodTicks++; if (goodTicks >= 5) weakTicks = 0 }
+        if (weakTicks >= 4 && SystemClock.elapsedRealtime() - weakDismissedAt > 10 * 60_000L) showWeak()
+        if (goodTicks >= 8) hideWeak()
+    }
+
+    private fun showWeak() {
+        if (weakBar != null) return
+        val bar = TextView(this).apply {
+            text = getString(R.string.weak_msg)
+            setTextColor(Color.WHITE)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            setBackgroundColor(Theme.weakBg)
+            setPadding(dp(12), dp(6), dp(12), dp(6))
+            setOnClickListener { showUsbHelp() }
+        }
+        weakBar = bar
+        root.addView(bar, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT,
+            Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply { topMargin = dp(8) })
+    }
+
+    private fun hideWeak() {
+        weakBar?.let { root.removeView(it) }
+        weakBar = null
+    }
+
+    private fun showUsbHelp() {
+        android.app.AlertDialog.Builder(this)
+            .setTitle(R.string.weak_title)
+            .setMessage(R.string.weak_help)
+            .setPositiveButton(R.string.weak_try_usb) { _, _ ->
+                // PC の「接続する」で USB の道ができていれば、そのままつながる
+                val t = target ?: return@setPositiveButton
+                hideWeak()
+                val usb = t.copy(hosts = listOf("127.0.0.1"), usb = true)
+                target = usb
+                conn?.close()
+                conn = Connection(usb, this).also { it.start() }
+            }
+            .setNegativeButton(R.string.weak_later) { _, _ ->
+                weakDismissedAt = SystemClock.elapsedRealtime()
+                hideWeak()
+            }
+            .show()
+    }
+
+    // ---------- 動作チェック（映像・タッチ・音を順に確かめる） ----------
+
+    @Volatile private var lastFrameAt = 0L
+    @Volatile private var lastStatus = ""
+    private var checkReply: ((JSONObject) -> Unit)? = null
+
+    override fun onCheck(j: JSONObject) {
+        ui.post {
+            val f = checkReply
+            checkReply = null
+            f?.invoke(j)
+        }
+    }
+
+    /** PC に問い合わせて、3 秒以内に答えが来なければ null */
+    private fun askPc(step: String, done: (JSONObject?) -> Unit) {
+        val c = conn
+        if (c == null) { done(null); return }
+        var finished = false
+        checkReply = { j -> if (!finished) { finished = true; done(j) } }
+        c.post(Protocol.T_CHECK, JSONObject().put("step", step))
+        ui.postDelayed({ if (!finished) { finished = true; checkReply = null; done(null) } }, 3000)
+    }
+
+    private fun runCheck() {
+        sideScroll.visibility = View.GONE
+        val results = ArrayList<String>()
+        // 1. つながっているか・映像
+        askPc("link") { j ->
+            if (j == null) {
+                results.add("✕ " + getString(R.string.check_link_ng))
+                showCheckResult(results)
+                return@askPc
+            }
+            results.add("○ " + getString(R.string.check_link_ok))
+            val videoOk = SystemClock.elapsedRealtime() - lastFrameAt < 3000
+            results.add(when {
+                videoOk -> "○ " + getString(R.string.check_video_ok)
+                lastStatus == "input_only" -> "－ " + getString(R.string.check_video_input_only)
+                lastStatus == "pc_only" -> "✕ " + getString(R.string.check_video_pc_only)
+                lastStatus == "no_driver" -> "✕ " + getString(R.string.check_video_no_driver)
+                else -> "✕ " + getString(R.string.check_video_ng)
+            })
+            // 2. タッチ：PC のマウスを画面の真ん中に動かして、見えたか聞く
+            val tv = touchView ?: video
+            touchView = tv
+            sendInput("move", tv.width / 2f, tv.height / 2f)
+            android.app.AlertDialog.Builder(this)
+                .setTitle(R.string.check_title)
+                .setMessage(R.string.check_touch_q)
+                .setCancelable(false)
+                .setPositiveButton(R.string.check_yes) { _, _ ->
+                    results.add("○ " + getString(R.string.check_touch_ok)); checkSound(results)
+                }
+                .setNegativeButton(R.string.check_no) { _, _ ->
+                    results.add("✕ " + getString(R.string.check_touch_ng)); checkSound(results)
+                }
+                .show()
+        }
+    }
+
+    private fun checkSound(results: ArrayList<String>) {
+        if (!prefs.audio) {
+            results.add("✕ " + getString(R.string.check_sound_tablet_off))
+            showCheckResult(results)
+            return
+        }
+        askPc("sound") { j ->
+            if (j == null || !j.optBoolean("audio")) {
+                results.add("✕ " + getString(R.string.check_sound_pc_off))
+                showCheckResult(results)
+                return@askPc
+            }
+            android.app.AlertDialog.Builder(this)
+                .setTitle(R.string.check_title)
+                .setMessage(R.string.check_sound_q)
+                .setCancelable(false)
+                .setPositiveButton(R.string.check_yes) { _, _ ->
+                    results.add("○ " + getString(R.string.check_sound_ok)); showCheckResult(results)
+                }
+                .setNegativeButton(R.string.check_no) { _, _ ->
+                    results.add("✕ " + getString(R.string.check_sound_ng)); showCheckResult(results)
+                }
+                .setNeutralButton(R.string.check_again) { _, _ -> checkSound(results) }
+                .show()
+        }
+    }
+
+    private fun showCheckResult(results: List<String>) {
+        android.app.AlertDialog.Builder(this)
+            .setTitle(R.string.check_result)
+            .setMessage(results.joinToString("\n\n"))
+            .setPositiveButton(android.R.string.ok, null)
+            .show()
     }
 
     override fun onDestroy() {

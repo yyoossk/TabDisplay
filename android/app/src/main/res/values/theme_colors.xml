@@ -28,4 +28,6 @@
     <color name="td_stats_bg">#80000000</color>
     <!-- 画面の上のボタンの大きさ -->
     <dimen name="td_button_size">44dp</dimen>
+    <!-- Wi-Fi が不安定なときの知らせ -->
+    <color name="td_weak_bg">#CCE65100</color>
 </resources>
