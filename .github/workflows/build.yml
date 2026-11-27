@@ -121,7 +121,9 @@ jobs:
         with:
           tag_name: build-${{ github.run_number }}
           name: TabDisplay build ${{ github.run_number }}
-          prerelease: true
+          # 自動更新が「最新のリリース」を見るので、正式版として出す
+          prerelease: false
+          make_latest: true
           files: |
             out/TabDisplay-Setup.exe
             out/TabDisplay-win-x64.zip
