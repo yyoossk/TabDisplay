@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TabDisplay</string>
+    <string name="usb_title">Connect with USB</string>
+    <string name="usb_body">1. Turn on \"USB debugging\" in Developer options.\n2. Plug the tablet into the PC.\n3. Press \"Connect\" in TabDisplay on the PC.</string>
+    <string name="wifi_title">Connect with Wi-Fi</string>
+    <string name="wifi_body">Press \"Wi-Fi (QR code)\" on the PC, then scan the code shown on the PC.</string>
+    <string name="scan_qr">Scan QR code</string>
+    <string name="recent_title">Connect again</string>
+    <string name="recent_none">No PCs yet</string>
+    <string name="settings_title">Settings</string>
+    <string name="opt_stats">Show delay and frame rate</string>
+    <string name="opt_quality">Resolution</string>
+    <string name="quality_full">Full (same as the screen)</string>
+    <string name="quality_75">75% (lighter)</string>
+    <string name="quality_50">50% (lightest)</string>
+    <string name="opt_haptic">Vibrate on long press (right click)</string>
+    <string name="forget">Forget</string>
+    <string name="scan_prompt">Scan the QR code shown on the PC</string>
+    <string name="bad_qr">This is not a TabDisplay QR code.</string>
+    <string name="connecting">Connecting to %1$s…</string>
+    <string name="connected">Connected to %1$s</string>
+    <string name="disconnected">Disconnected</string>
+    <string name="retrying">Connection lost. Retrying…</string>
+    <string name="err_connect">Could not connect to the PC.\nCheck that the PC and tablet are on the same Wi-Fi, and that TabDisplay is open on the PC.</string>
+    <string name="err_token">The PC refused the connection. Scan the QR code again.</string>
+    <string name="err_decoder">This tablet cannot play the video. Try a lower resolution in Settings.</string>
+    <string name="pc_only">The PC is set to \"PC only\". Nothing is shown on the tablet.</string>
+    <string name="no_driver">The virtual display is not installed on the PC. Press \"Install virtual display\" in TabDisplay on the PC.</string>
+    <string name="waiting_video">Waiting for the picture…</string>
+    <string name="exit_hint">Press Back again to disconnect</string>
+    <string name="stats_fmt">%1$d fps  delay %2$d ms  ping %3$d ms</string>
+    <string name="opt_auto">Connect automatically when a PC I used before is found on Wi-Fi</string>
+    <string name="opt_audio">Play the PC\'s sound</string>
+    <string name="gestures">Tap: click / Long press: right click / Drag: scroll\nTwo-finger tap: right click / Pinch: zoom / Pen: pen input with pressure\n⌨ button: keyboard</string>
+</resources>

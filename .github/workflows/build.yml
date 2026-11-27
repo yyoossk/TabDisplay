@@ -1,0 +1,117 @@
+name: Build
+
+# 「ビルドして」と言われたときだけ手で動かす（push では動かさない）
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    uses: yyoossk/android-build-env/.github/workflows/android-build.yml@main
+    with:
+      project-dir: android
+      gradle-task: assembleRelease
+      artifact-name: apk
+    secrets: inherit
+
+  windows:
+    needs: android
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get APK
+        uses: actions/download-artifact@v4
+        with:
+          name: apk
+          path: apk-artifact
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Build PC app
+        run: >
+          dotnet publish pc/TabDisplay/TabDisplay.csproj -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none
+          -o out/TabDisplay
+
+      - name: Add tools (ffmpeg, adb, nefcon, virtual display driver)
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $out = "out/TabDisplay"
+          $tmp = "$env:RUNNER_TEMP/dl"
+          New-Item -ItemType Directory -Force $tmp, "$out/tools/platform-tools", "$out/tools/nefcon", "$out/driver", "$out/apk", "$out/licenses" | Out-Null
+
+          # ffmpeg（画面の取り込みと H.264 圧縮）
+          Invoke-WebRequest "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip" -OutFile "$tmp/ffmpeg.zip"
+          Expand-Archive "$tmp/ffmpeg.zip" "$tmp/ffmpeg"
+          $ff = Get-ChildItem "$tmp/ffmpeg" -Recurse -Filter ffmpeg.exe | Select-Object -First 1
+          Copy-Item $ff.FullName "$out/tools/ffmpeg.exe"
+          Get-ChildItem "$tmp/ffmpeg" -Recurse -Filter LICENSE.txt | Select-Object -First 1 | Copy-Item -Destination "$out/licenses/ffmpeg-LICENSE.txt"
+
+          # adb（USB 接続）
+          Invoke-WebRequest "https://dl.google.com/android/repository/platform-tools-latest-windows.zip" -OutFile "$tmp/pt.zip"
+          Expand-Archive "$tmp/pt.zip" "$tmp/pt"
+          foreach ($f in "adb.exe", "AdbWinApi.dll", "AdbWinUsbApi.dll") { Copy-Item "$tmp/pt/platform-tools/$f" "$out/tools/platform-tools/" }
+          if (Test-Path "$tmp/pt/platform-tools/NOTICE.txt") { Copy-Item "$tmp/pt/platform-tools/NOTICE.txt" "$out/licenses/platform-tools-NOTICE.txt" }
+
+          # nefcon（ドライバーを入れる道具）
+          Invoke-WebRequest "https://github.com/nefarius/nefcon/releases/download/v1.14.0/nefcon_v1.14.0.zip" -OutFile "$tmp/nefcon.zip"
+          Expand-Archive "$tmp/nefcon.zip" "$tmp/nefcon"
+          $nc = Get-ChildItem "$tmp/nefcon" -Recurse -Filter nefconw.exe | Where-Object { $_.FullName -match "x64" } | Select-Object -First 1
+          Copy-Item $nc.FullName "$out/tools/nefcon/nefconw.exe"
+
+          # Virtual Display Driver（署名済み・MIT）。最新版の「Driver.Only」を探し、なければ固定の版
+          $url = "https://github.com/VirtualDrivers/Virtual-Display-Driver/releases/download/25.7.23/VirtualDisplayDriver-x86.Driver.Only.zip"
+          try {
+            $rel = Invoke-RestMethod -Headers @{ Authorization = "Bearer $env:GH_TOKEN" } "https://api.github.com/repos/VirtualDrivers/Virtual-Display-Driver/releases/latest"
+            $a = $rel.assets | Where-Object { $_.name -match "Driver\.Only" -and $_.name -match "x86" -and $_.name -notmatch "arm" } | Select-Object -First 1
+            if ($a) { $url = $a.browser_download_url }
+          } catch { Write-Host "release lookup failed, using pinned driver" }
+          Write-Host "driver: $url"
+          Invoke-WebRequest $url -OutFile "$tmp/vdd.zip"
+          Expand-Archive "$tmp/vdd.zip" "$tmp/vdd"
+          $inf = Get-ChildItem "$tmp/vdd" -Recurse -Filter MttVDD.inf | Select-Object -First 1
+          if (-not $inf) { throw "MttVDD.inf not found" }
+          Copy-Item "$($inf.DirectoryName)/*" "$out/driver/" -Recurse
+
+          # タブレット用アプリ（PC から USB で入れる）
+          $apk = Get-ChildItem apk-artifact -Recurse -Filter *.apk | Select-Object -First 1
+          Copy-Item $apk.FullName "$out/apk/TabDisplay.apk"
+          $vc = (Select-String -Path android/app/build.gradle.kts -Pattern 'versionCode\s*=\s*(\d+)').Matches[0].Groups[1].Value
+          Set-Content "$out/apk/version.txt" $vc -NoNewline
+          Copy-Item $apk.FullName "out/TabDisplay.apk"
+
+          Copy-Item THIRD_PARTY.md "$out/licenses/"
+
+      - name: Pack
+        shell: pwsh
+        run: |
+          Compress-Archive -Path out/TabDisplay -DestinationPath out/TabDisplay-win-x64.zip
+          git archive --format=zip --prefix=TabDisplay-src/ -o out/TabDisplay-src.zip HEAD
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TabDisplay
+          path: |
+            out/TabDisplay-win-x64.zip
+            out/TabDisplay.apk
+            out/TabDisplay-src.zip
+
+      - name: Release (direct download links)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: TabDisplay build ${{ github.run_number }}
+          prerelease: true
+          files: |
+            out/TabDisplay-win-x64.zip
+            out/TabDisplay.apk
+            out/TabDisplay-src.zip

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TabDisplay</string>
+    <string name="usb_title">USB でつなぐ</string>
+    <string name="usb_body">1. 開発者向けオプションで「USB デバッグ」をオンにする\n2. タブレットを PC に挿す\n3. PC の TabDisplay で「接続する」を押す</string>
+    <string name="wifi_title">Wi-Fi でつなぐ</string>
+    <string name="wifi_body">PC の「Wi-Fi（QR コード）」を押して、PC に出た QR コードを読み取ります。</string>
+    <string name="scan_qr">QR コードを読む</string>
+    <string name="recent_title">前につないだ PC</string>
+    <string name="recent_none">まだありません</string>
+    <string name="settings_title">設定</string>
+    <string name="opt_stats">遅れと 1 秒あたりの枚数を表示する</string>
+    <string name="opt_quality">解像度</string>
+    <string name="quality_full">そのまま（画面と同じ）</string>
+    <string name="quality_75">75%（軽い）</string>
+    <string name="quality_50">50%（いちばん軽い）</string>
+    <string name="opt_haptic">長押し（右クリック）で震わせる</string>
+    <string name="forget">消す</string>
+    <string name="scan_prompt">PC に出ている QR コードを読み取ってください</string>
+    <string name="bad_qr">TabDisplay の QR コードではありません。</string>
+    <string name="connecting">%1$s に接続しています…</string>
+    <string name="connected">%1$s に接続しました</string>
+    <string name="disconnected">切断しました</string>
+    <string name="retrying">接続が切れました。つなぎ直しています…</string>
+    <string name="err_connect">PC に接続できませんでした。\nPC とタブレットが同じ Wi-Fi につながっているか、PC で TabDisplay が開いているか確かめてください。</string>
+    <string name="err_token">PC に断られました。もう一度 QR コードを読み取ってください。</string>
+    <string name="err_decoder">このタブレットでは映像を再生できません。設定で解像度を下げてください。</string>
+    <string name="pc_only">PC が「PC のみ」になっています。タブレットには何も映しません。</string>
+    <string name="no_driver">PC に仮想ディスプレイが入っていません。PC の TabDisplay で「仮想ディスプレイを入れる」を押してください。</string>
+    <string name="waiting_video">映像を待っています…</string>
+    <string name="exit_hint">もう一度「戻る」を押すと切断します</string>
+    <string name="stats_fmt">%1$d fps  遅れ %2$d ms  往復 %3$d ms</string>
+    <string name="opt_auto">前につないだ PC が Wi-Fi で見つかったら自動でつなぐ</string>
+    <string name="opt_audio">PC の音を鳴らす</string>
+    <string name="gestures">タップ：クリック ／ 長押し：右クリック ／ なぞる：スクロール\n2 本指タップ：右クリック ／ つまむ・広げる：拡大縮小 ／ ペン：筆圧つきのペン入力\n⌨ ボタン：キーボード</string>
+</resources>
