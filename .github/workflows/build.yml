@@ -72,7 +72,8 @@ jobs:
           $url = "https://github.com/VirtualDrivers/Virtual-Display-Driver/releases/download/25.7.23/VirtualDisplayDriver-x86.Driver.Only.zip"
           try {
             $rel = Invoke-RestMethod -Headers @{ Authorization = "Bearer $env:GH_TOKEN" } "https://api.github.com/repos/VirtualDrivers/Virtual-Display-Driver/releases/latest"
-            $a = $rel.assets | Where-Object { $_.name -match "Driver\.Only" -and $_.name -match "x86" -and $_.name -notmatch "arm" } | Select-Object -First 1
+            # 同じリリースに音声のドライバー（VirtualAudioDriver）もあるので、画面のドライバーだけを選ぶ
+            $a = $rel.assets | Where-Object { $_.name -match "^VirtualDisplayDriver" -and $_.name -match "Driver\.Only" -and $_.name -match "x86" -and $_.name -notmatch "arm" } | Select-Object -First 1
             if ($a) { $url = $a.browser_download_url }
           } catch { Write-Host "release lookup failed, using pinned driver" }
           Write-Host "driver: $url"
